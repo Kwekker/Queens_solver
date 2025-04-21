@@ -1,0 +1,4 @@
+*.log
+queens
+*.c_
+solver
