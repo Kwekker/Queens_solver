@@ -223,7 +223,7 @@ void printBoard(board_t board) {
 }
 
 
-void visuPrompt(board_t board, cell_t *blockCell, uint8_t s, cell_t *markCell, cellSet_t *markSet) {
+void visuPrompt(board_t board, cell_t *blockCell, cell_t *markCell, cellSet_t *markSet) {
 
     printf("   ");
     for (uint32_t i = 0; i < board.size; i++) {

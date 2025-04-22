@@ -91,7 +91,7 @@ void crossCell(cell_t *cell);
 uint8_t inSet(cellSet_t *set, cell_t* cell);
 
 uint8_t checkBoard(board_t board);
-void visuPrompt(board_t board, cell_t *cell, uint8_t s, cell_t *markCell, cellSet_t *markSet);
+void visuPrompt(board_t board, cell_t *cell, cell_t *markCell, cellSet_t *markSet);
 
 
 void printBoard(board_t board);

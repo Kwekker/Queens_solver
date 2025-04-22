@@ -31,11 +31,12 @@ int main(int argc, char *argv[]) {
     }
     printf("Size: %d\n", size);
 
-    board_t board = createBoard(8);
+    board_t board = createBoard(size);
 
     fseek(file, 0, SEEK_SET);
     if (readQueensFile(file, &board)) {
         fprintf(stderr, "Reading the board went wrong somehow whoops\n");
+        freeBoard(board);
         return -1;
     }
 

@@ -16,6 +16,10 @@
 static uint8_t checkCellBlocker(board_t board, cell_t *cell);
 static void setQueen(board_t board, cell_t *cell);
 static void isolate(cellSet_t *set, cell_t *cell);
+static uint8_t markCell(
+    cell_t *potentialBlocker, cell_t *markCell,
+    cellSet_t **affectedSets, size_t *affectedSet_i
+);
 
 
 
@@ -111,7 +115,7 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
         cell->column->cellCount + cell->row->cellCount + cell->group->cellCount
         - 3 // We ignore the cell we're checking in the iterations,
             // so we don't count it.
-    );
+    ) + 4; // Add 4 for the four corners.
 
     // Allocate an array of that amount of pointers.
     cellSet_t **affectedSets = malloc(affectedSetCount * sizeof(cellSet_t*));
@@ -119,31 +123,27 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
 
     uint8_t isBlocker = 0;
 
-    // Iterate over every affected set
+    // Iterate over every affected set.
     for (uint32_t s = 0; s < 3; s++) {
         for (uint32_t c = 0; c < cell->sets[s]->cellCount; c++) {
-            cell_t *markCell = cell->sets[s]->cells[c];
-            if (markCell == cell || markCell->type == CELL_MARKED)
+            cell_t *mCell = cell->sets[s]->cells[c];
+            if (mCell == cell || mCell->type == CELL_MARKED)
                 continue;
-            markCell->type = CELL_MARKED;
+            mCell->type = CELL_MARKED;
 
-            for (uint32_t mark_s = 0; mark_s < 3; mark_s++) {
-                cellSet_t *markSet = markCell->sets[mark_s];
-                if (inSet(markSet, cell)) continue;
-
-                // We use the cool variable field for this
-                // (very useful)
-                markSet->variable++;
-                affectedSets[affectedSet_i++] = markSet;
-                if (markSet->cellCount - markSet->variable <= 0) {
-                    isBlocker = 1;
-
-                    visuPrompt(gBoard, cell, s, markCell, markSet);
-
-                    //* Evil goto statement (evil).
-                    goto break_all;
-                }
+            if (markCell(cell, mCell, affectedSets, &affectedSet_i)) {
+                isBlocker = 1;
+                goto break_all;
             }
+        }
+    }
+
+    // Iterate over corners.
+    corners_t corners = getCorners(board, *cell);
+    for (uint8_t i = 0; i < corners.count; i++) {
+        if (markCell(cell, corners.cells[i], affectedSets, &affectedSet_i)) {
+            isBlocker = 1;
+            break;
         }
     }
 
@@ -158,6 +158,8 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
                 markCell->type = CELL_EMPTY;
         }
     }
+
+    // Set the variable of all the affected sets back to 0.
     for (size_t i = 0; i < affectedSet_i; i++) {
         affectedSets[i]->variable = 0;
     }
@@ -165,4 +167,30 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
     free(affectedSets);
 
     return isBlocker;
+}
+
+
+uint8_t markCell(
+    cell_t *potentialBlocker, cell_t *markCell,
+    cellSet_t **affectedSets, size_t *affectedSet_i
+) {
+    markCell->type = CELL_MARKED;
+
+    for (uint32_t mark_s = 0; mark_s < 3; mark_s++) {
+        cellSet_t *markSet = markCell->sets[mark_s];
+        if (inSet(markSet, potentialBlocker)) continue;
+
+        // We use the cool variable field for this
+        // (very useful)
+        markSet->variable++;
+        affectedSets[*affectedSet_i] = markSet;
+        (*affectedSet_i)++;
+
+        if (markSet->cellCount - markSet->variable <= 0) {
+            visuPrompt(gBoard, potentialBlocker, markCell, markSet);
+            return 1;
+        }
+    }
+
+    return 0;
 }
