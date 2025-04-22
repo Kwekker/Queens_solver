@@ -7,6 +7,7 @@
 
 int main(int argc, char *argv[]) {
 
+    //* Opening file
     if (argc != 2) {
         printf(
             "What te hell are you dooiing???\n"
@@ -15,15 +16,22 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    board_t board = createBoard(8);
-
     FILE *file = fopen(argv[1], "r");
     uint32_t size = 0;
 
+    if (file == NULL) {
+        fprintf(stderr, "Your stupid file doesn't exist nerd.\n");
+        return -1;
+    }
+
+
+    //* Reading file
     if (measureQueensFile(file, &size)) {
         return -1;
     }
     printf("Size: %d\n", size);
+
+    board_t board = createBoard(8);
 
     fseek(file, 0, SEEK_SET);
     if (readQueensFile(file, &board)) {
@@ -31,18 +39,17 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
-    for (uint32_t j = 0; j < board.size; j++) {
-        for (uint32_t i = 0; i < board.size; i++) {
-            printf("%d", board.cells[j * board.size + i].color);
-        }
-        printf("\n");
-    }
+    printBoard(board);
 
     for (uint32_t i = 0; i < board.size; i++) {
         printf("Group %u size is %zu\n", i, board.groups[i].cellCount);
     }
 
-    solve(board);
+    for (uint8_t i = 0; i < 6; i++) {
+        solve(board);
+        printBoard(board);
+        printf("\n\n");
+    }
 
     printf("Cols: ");
     for (uint32_t i = 0; i < board.size; i++) {
