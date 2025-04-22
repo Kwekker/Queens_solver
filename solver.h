@@ -4,7 +4,10 @@
 #include "types.h"
 
 
-void solve(board_t board);
+// #define PRINT_INTERMEDIATE
+// #define PRINT_LOGS
+
+uint8_t solve(board_t board);
 
 
 #endif

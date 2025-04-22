@@ -6,11 +6,15 @@
 #include "solver.h"
 #include "types.h"
 
+#include "debug_prints.h"
+
 #define GREEN "\x1b[33m"
 #define NONE "\x1b[0m"
 
-//TODO: Use brain and think about the following:
-//TODO: Should cells have pointers to their corners within them?
+
+//TODO: Add a more complicated solving algorithm that checks more than 1 cell set.
+//TODO: Like, if red and green are only on rows 4 and 5, the other cells on 4 and 5
+//TODO: should be crossed.
 
 
 static uint8_t checkCellBlocker(board_t board, cell_t *cell);
@@ -27,7 +31,7 @@ static uint8_t markCell(
 board_t gBoard;
 
 
-void solve(board_t board) {
+uint8_t solve(board_t board) {
 
     gBoard = board;
 
@@ -37,10 +41,16 @@ void solve(board_t board) {
         if (set.solved == 1) continue;
         if (set.cellCount == 1) {
             set.solved = 1;
-            printf("Found a queen at [%d, %d]\n", set.cells[0]->x, set.cells[0]->y);
+            DPRINTF("Found queen at [%d, %d]\n", set.cells[0]->x, set.cells[0]->y);
             setQueen(board, set.cells[0]);
         }
     }
+
+#ifdef PRINT_INTERMEDIATE
+    printf("Intermediate board:\n");
+    printBoard(board);
+    printf("\n");
+#endif
 
     for (uint32_t j = 0; j < board.size; j++) {
         for (uint32_t i = 0; i < board.size; i++) {
@@ -53,6 +63,16 @@ void solve(board_t board) {
         }
     }
 
+    for (uint32_t i = 0; i < board.size; i++) {
+        if (board.groups[i].cellCount != 1) {
+            // Not solved yet.
+            DPRINTF("It's not solved yet because group %d has %ld cells.\n", i, board.groups[i].cellCount);
+            return 0;
+        }
+    }
+
+    // Solved!
+    return 1;
 }
 
 
@@ -96,8 +116,8 @@ void isolate(cellSet_t *set, cell_t *cell) {
     }
 
     if (set->cells[0] != cell) {
-        printf("Cell 0 isn't the queen???? huh???\n");
-        printf("It's fuckin %p where the queen is %p\n", set->cells[0], cell);
+        fprintf(stderr, "Cell 0 isn't the queen???? huh???\n");
+        fprintf(stderr, "It's fuckin %p where the queen is %p\n", set->cells[0], cell);
     }
 
     set->cellCount = 1;
@@ -127,9 +147,8 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
     for (uint32_t s = 0; s < 3; s++) {
         for (uint32_t c = 0; c < cell->sets[s]->cellCount; c++) {
             cell_t *mCell = cell->sets[s]->cells[c];
-            if (mCell == cell || mCell->type == CELL_MARKED)
+            if (mCell == cell)
                 continue;
-            mCell->type = CELL_MARKED;
 
             if (markCell(cell, mCell, affectedSets, &affectedSet_i)) {
                 isBlocker = 1;
@@ -158,6 +177,9 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
                 markCell->type = CELL_EMPTY;
         }
     }
+    for (uint8_t i = 0; i < corners.count; i++)
+        if(corners.cells[i]->type == CELL_MARKED)
+            corners.cells[i]->type = CELL_EMPTY;
 
     // Set the variable of all the affected sets back to 0.
     for (size_t i = 0; i < affectedSet_i; i++) {
@@ -174,6 +196,8 @@ uint8_t markCell(
     cell_t *potentialBlocker, cell_t *markCell,
     cellSet_t **affectedSets, size_t *affectedSet_i
 ) {
+    // Don't doubly mark cells.
+    if (markCell->type == CELL_MARKED) return 0;
     markCell->type = CELL_MARKED;
 
     for (uint32_t mark_s = 0; mark_s < 3; mark_s++) {
@@ -187,7 +211,9 @@ uint8_t markCell(
         (*affectedSet_i)++;
 
         if (markSet->cellCount - markSet->variable <= 0) {
+#ifdef DEBUG_PRINTS
             visuPrompt(gBoard, potentialBlocker, markCell, markSet);
+#endif
             return 1;
         }
     }

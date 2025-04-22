@@ -5,6 +5,8 @@
 #include "types.h"
 #include "reader.h"
 
+#define PRINT_STEPS
+
 int main(int argc, char *argv[]) {
 
     //* Opening file
@@ -42,28 +44,30 @@ int main(int argc, char *argv[]) {
 
     printBoard(board);
 
-    for (uint32_t i = 0; i < board.size; i++) {
-        printf("Group %u size is %zu\n", i, board.groups[i].cellCount);
-    }
+    printf("\n");
 
-    for (uint8_t i = 0; i < 6; i++) {
-        solve(board);
+    uint8_t solved = 0;
+    uint8_t iteration = 0;
+    for (; iteration < 7; iteration++) {
+        if (solve(board)) {
+            solved = 1;
+            break;
+        }
+#ifdef PRINT_STEPS
         printBoard(board);
         printf("\n\n");
+#endif
     }
 
-    printf("Cols: ");
-    for (uint32_t i = 0; i < board.size; i++) {
-        printf("%2zu ", board.columns[i].cellCount);
+    if (solved == 0) {
+        printf("\nCould not solve the board in %d iterations :(\n\n", iteration);
     }
-    printf("\nRows: ");
-    for (uint32_t i = 0; i < board.size; i++) {
-        printf("%2zu ", board.columns[i].cellCount);
+    else {
+        printf("\nSolved the board in %d iterations!!\n\n", iteration + 1);
     }
-    printf("\nGrps: ");
-    for (uint32_t i = 0; i < board.size; i++) {
-        printf("%2zu ", board.columns[i].cellCount);
-    }
+
+    printBoard(board);
+
     printf("\n");
 
     freeBoard(board);

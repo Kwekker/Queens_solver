@@ -3,6 +3,8 @@
 
 #include "types.h"
 
+#include "debug_prints.h"
+
 
 void freeBoard(board_t board);
 
@@ -19,12 +21,6 @@ board_t createBoard(uint32_t size) {
     ret.set_arrays[0] = sets;
     ret.set_arrays[1] = sets + size;
     ret.set_arrays[2] = sets + 2 * size;
-
-    printf("Alloc'd the arrays.\n0: %p\n1: %p\n2: %p\n",
-        ret.set_arrays[0],
-        ret.set_arrays[1],
-        ret.set_arrays[2]
-    );
 
     // Populate the set arrays.
     for (uint32_t i = 0; i < size; i++) {
@@ -148,7 +144,7 @@ corners_t getCorners(board_t board, cell_t cell) {
 
 
 void crossCell(cell_t *cell) {
-    printf("Crossing cell [\x1b[90m%d, %d\x1b[0m]\n", cell->x, cell->y);
+    DPRINTF("Crossing cell [\x1b[90m%d, %d\x1b[0m]\n", cell->x, cell->y);
 
     cell->type = CELL_CROSSED;
 
@@ -197,7 +193,7 @@ void printBoard(board_t board) {
     }
     printf("\n");
 
-    char typeChars[] = {'o', '.', 'Q'};
+    char typeChars[] = {'o', '.', 'Q', 'M'};
     uint32_t textColors[] = {
         31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97
     };
@@ -205,7 +201,7 @@ void printBoard(board_t board) {
     for (uint32_t j = 0; j < board.size; j++) {
         printf("\x1b[%dm%2d ", textColors[j], j);
         for (uint32_t i = 0; i < board.size; i++) {
-            if (board.cells[j * board.size + i].type > 2) {
+            if (board.cells[j * board.size + i].type > 3) {
                 printf("\x1b[%dm E",
                     textColors[board.cells[j * board.size + i].color]
                 );
