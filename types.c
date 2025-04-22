@@ -32,6 +32,7 @@ board_t createBoard(uint32_t size) {
         // Populate the columns with cells.
         ret.columns[i].cells = calloc(size, sizeof(cell_t*));
         ret.columns[i].cellCount = size;
+        ret.columns[i].identifier = i;
         for (uint32_t j = 0; j < size; j++) {
             ret.columns[i].cells[j] = &ret.cells[j * size + i];
         }
@@ -39,12 +40,19 @@ board_t createBoard(uint32_t size) {
         // Populate the rows with cells.
         ret.rows[i].cells = calloc(size, sizeof(cell_t*));
         ret.rows[i].cellCount = size;
+        ret.rows[i].identifier = i;
         for (uint32_t j = 0; j < size; j++) {
             ret.rows[i].cells[j] = &ret.cells[i * size + j];
         }
 
         // We do not yet know the size of the groups,
         // so we cannot populate the groups set.
+        // However, we need to be able to differentiate between an
+        // _unset_ group and an _empty_ group, because the former
+        // doesn't have any allocated cell arrays where the latter does.
+        // Thus, we set its count to -1.
+        ret.groups[i].cellCount = -1;
+        ret.groups[i].identifier = i;
     }
 
 
@@ -69,7 +77,7 @@ void freeBoard(board_t board) {
     for (uint8_t s = 0; s < 3; s++) {
 
         for (uint32_t i = 0; i < board.size; i++) {
-            if (board.set_arrays[s][i].cellCount > 0) {
+            if (board.set_arrays[s][i].cellCount != -1) {
                 // Free the array of pointers in the set array.
                 free(board.set_arrays[s][i].cells);
             }
@@ -115,6 +123,7 @@ corners_t getCorners(board_t board, cell_t cell) {
         // Check if the corner is in bounds.
         int32_t newX = cell.x + x[i];
         int32_t newY = cell.y + y[i];
+
         // This has to be a pointer because its index could be
         // outside the bounds of the board's cells array.
         // If it wasn't a pointer, C would try to copy the contents
@@ -124,7 +133,7 @@ corners_t getCorners(board_t board, cell_t cell) {
 
         if ( // Thank you short-circuiting, my hero.
             newX < 0 || newX >= board.size
-            || newY < 0 || newY > board.size
+            || newY < 0 || newY >= board.size
             || corner->type == CELL_CROSSED
         ) continue;
 
@@ -139,6 +148,8 @@ corners_t getCorners(board_t board, cell_t cell) {
 
 
 void crossCell(cell_t *cell) {
+    printf("Crossing cell [\x1b[90m%d, %d\x1b[0m]\n", cell->x, cell->y);
+
     cell->type = CELL_CROSSED;
 
     for (uint8_t s = 0; s < 3; s++) {
@@ -150,8 +161,102 @@ void crossCell(cell_t *cell) {
                 // the newly created hole.
                 set->cells[c] = set->cells[set->cellCount - 1];
                 set->cellCount--;
+                // TODO: Check for queens!
                 break;
             }
         }
     }
+}
+
+
+uint8_t inSet(cellSet_t *set, cell_t* cell) {
+    return set == cell->column
+        || set == cell->row
+        || set == cell->group;
+}
+
+
+uint8_t checkBoard(board_t board) {
+    for (uint32_t i = 0; i < board.size; i++) {
+        if (
+            board.columns[i].variable
+            || board.rows[i].variable
+            || board.groups[i].variable
+        ) return -1;
+    }
+
+    return 0;
+}
+
+
+
+void printBoard(board_t board) {
+    printf("   ");
+    for (uint32_t i = 0; i < board.size; i++) {
+        printf("%2d", i);
+    }
+    printf("\n");
+
+    char typeChars[] = {'o', '.', 'Q'};
+    uint32_t textColors[] = {
+        31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97
+    };
+
+    for (uint32_t j = 0; j < board.size; j++) {
+        printf("\x1b[%dm%2d ", textColors[j], j);
+        for (uint32_t i = 0; i < board.size; i++) {
+            if (board.cells[j * board.size + i].type > 2) {
+                printf("\x1b[%dm E",
+                    textColors[board.cells[j * board.size + i].color]
+                );
+            }
+            else {
+                printf("\x1b[%dm %c",
+                    textColors[board.cells[j * board.size + i].color],
+                    typeChars[board.cells[j * board.size + i].type]
+                );
+            }
+        }
+        printf("\n\x1b[0m");
+    }
+
+}
+
+
+void visuPrompt(board_t board, cell_t *blockCell, uint8_t s, cell_t *markCell, cellSet_t *markSet) {
+
+    printf("   ");
+    for (uint32_t i = 0; i < board.size; i++) {
+        printf("%2d", i);
+    }
+    printf("\n");
+
+    char typeChars[] = {'o', '.', 'Q', 'M'};
+
+    for (uint32_t j = 0; j < board.size; j++) {
+        printf("%2d ", j);
+        for (uint32_t i = 0; i < board.size; i++) {
+            cell_t *cell = &board.cells[j * board.size + i];
+
+            uint32_t textColor = 90;
+            if (cell == blockCell) textColor = 31;
+            else if (cell == markCell) textColor = 33;
+            else if (inSet(markSet, cell)) textColor = 34;
+
+            if (cell->type >= sizeof(typeChars)) {
+                printf("\x1b[%dm E", textColor);
+            }
+            else {
+                printf("\x1b[%dm %c", textColor, typeChars[cell->type]);
+            }
+        }
+        printf("\n\x1b[0m");
+    }
+
+    printf(
+        "Cell [\x1b[31m%d, %d\x1b[0m] is blocking because of cell "
+        "[\x1b[33m%d, %d\x1b[0m]'s set \x1b[34m%d\x1b[0m. ",
+        blockCell->x, blockCell->y,
+        markCell->x, markCell->y, markSet->identifier
+    );
 }

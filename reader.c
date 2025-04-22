@@ -19,6 +19,11 @@ int readQueensFile(FILE *file, board_t *board) {
     memset(identifiers, 0, size);
     uint32_t identifiers_index = 0;
 
+    // Init the cellCounts to 0 because they start at -1.
+    for (uint32_t i = 0; i < size; i++) {
+        board->groups[i].cellCount = 0;
+    }
+
     // Set all color and group values in the cells,
     // and set the cellCounts in the groups.
     for (uint32_t i = 0; i < size; i++) {

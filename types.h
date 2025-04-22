@@ -9,8 +9,10 @@
 
 typedef struct cellSet_struct cellSet_t;
 
+#define CELL_EMPTY 0
 #define CELL_CROSSED 1
 #define CELL_QUEEN 2
+#define CELL_MARKED 3
 
 // Every cell has 3 properties: x, y, and color.
 // These properties each put it in a column, row, and group, respectively.
@@ -44,9 +46,12 @@ struct cellSet_struct{
     cell_t **cells;
     size_t cellCount;
 
-    // Handy variable to keep around.
-    uint32_t solved;
+    uint8_t solved;
 
+    // Handy variable to keep around.
+    // Used by functions for various things.
+    // Assumed to always be set back to 0.
+    int16_t variable;
 };
 
 
@@ -83,6 +88,13 @@ board_t createBoard(uint32_t size);
 void freeBoard(board_t board);
 corners_t getCorners(board_t board, cell_t cell);
 void crossCell(cell_t *cell);
+uint8_t inSet(cellSet_t *set, cell_t* cell);
+
+uint8_t checkBoard(board_t board);
+void visuPrompt(board_t board, cell_t *cell, uint8_t s, cell_t *markCell, cellSet_t *markSet);
+
+
+void printBoard(board_t board);
 
 
 #endif
