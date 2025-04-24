@@ -4,6 +4,7 @@
 #include "solver.h"
 #include "types.h"
 #include "reader.h"
+#include "seeer.h"
 
 #define PRINT_STEPS
 

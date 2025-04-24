@@ -1,5 +1,4 @@
-#include <X11/X.h>
-#include <X11/Xlib.h>
+#include "seeer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -11,87 +10,69 @@
 #define PRINT_PROPERTIES_IN_TREE
 
 
-void printKids(Display *display, Window *kids, uint32_t kidCount, uint32_t depth) {
-
-    for (uint32_t i = 0; i < kidCount; i++) {
-        XWindowAttributes attrs;
-        XGetWindowAttributes(display, kids[i], &attrs);
-
-        for (uint32_t d = 0; d < depth; d++) fprintf(stderr, "\t");
-        fprintf(stderr, "Kid \x1b[33m%d\x1b[0m: ", i);
+static void printKids(Display *display, Window *kids, uint32_t kidCount, uint32_t depth);
+static void screenshotToFile(Display *display, char *fileName, Window window);
+static void printProperties(Display *display, Window window);
+static uint8_t isBrowser(Display *display, Window window);
 
 
-        // Name
-        char *name;
-        XFetchName(display, kids[i], &name);
-
-        fprintf(stderr, "\"\x1b[34m%s\x1b[0m\" (%lx) ", name, kids[i]);
-        if (attrs.class == InputOutput) fprintf(stderr, "[\x1b[32mINOUT\x1b[0m] ");
-        free(name);
-
-#ifdef PRINT_PROPERTIES_IN_TREE
-        int propertiesCount;
-        Atom *properties = XListProperties(display, kids[i], &propertiesCount);
-        fprintf(stderr, "properties:\n");
-        for (int p = 0; p < propertiesCount; p++) {
-            for (uint32_t d = 0; d < depth + 1; d++) fprintf(stderr, "\t");
-            char *atomName = XGetAtomName(display, properties[p]);
-            fprintf(stderr, "[%s]\n", atomName);
-        }
-#endif
-
-        Window idc1, idc2;
-        Window *kidsKids;
-        uint32_t kidsKidCount = 0;
-        XQueryTree(display, kids[i], &idc1, &idc2, &kidsKids, &kidsKidCount);
-
-        if (kidsKidCount > 0) {
-#ifdef PRINT_PROPERTIES_IN_TREE
-            for (uint32_t d = 0; d < depth; d++) fprintf(stderr, "\t");
-#endif
-            printf("has %d kids:\n", kidsKidCount);
-            printKids(display, kidsKids, kidsKidCount, depth + 1);
-        }
-#ifndef PRINT_PROPERTIES_IN_TREE
-        else printf("\n");
-#endif
-
-        XFree(kidsKids);
-
-    }
-}
-
-
-Window findVivaldi(Display *display, Window root) {
-
+Window findBrowser(Display *display, Window root, int depth) {
     Window idc1, idc2;
-    Window *children;
+    Window *kids;
     uint32_t kidCount = 0;
-    XQueryTree(display, root, &idc1, &idc2, &children, &kidCount);
+    XQueryTree(display, root, &idc1, &idc2, &kids, &kidCount);
+
+    for (uint32_t d = 0; d < depth; d++) printf("\t");
+    printf("has %d kids\n", kidCount);
 
     for (uint32_t i = 0; i < kidCount; i++) {
-        XWindowAttributes attrs;
-        XGetWindowAttributes(display, children[i], &attrs);
 
-        // Name
-        char *name;
-        XFetchName(display, children[i], &name);
-        if (
-            attrs.class == InputOutput
-            && name != NULL
-            && strcmp(name, "vivaldi-stable") == 0
-        ) {
-            fprintf(stderr, "Found vivaldi!!\n");
-            XFree(name);
-            return children[i];
+        for (uint32_t d = 0; d < depth; d++) printf("\t");
+        printf("kid %d [%lx]: ", i, kids[i]);
+        if (isBrowser(display, kids[i])) {
+            printf("it a brows!!\n");
+            return kids[i];
         }
-        XFree(name);
+        printf("Not a brows :( \n");
 
+
+        Window potentialBrowser = findBrowser(display, kids[i], depth + 1);
+        if (potentialBrowser != 0) return potentialBrowser;
     }
 
-    XFree(children);
-    return root;
+    XFree(kids);
+    return 0;
 }
+
+
+uint8_t isBrowser(Display *display, Window window) {
+
+    Atom atom = XInternAtom(display, "WM_WINDOW_ROLE", 1);
+    if (atom == None) return 0;
+
+    Atom type;
+    int format;
+    unsigned long nitems;
+    unsigned long remaining;
+    unsigned char *data;
+
+    XGetWindowProperty(
+        display,
+        window,
+        atom,
+        0, 32, 0,
+        AnyPropertyType,
+        &type,
+        &format,
+        &nitems,
+        &remaining,
+        &data
+    );
+    if (nitems != 7) return 0;
+    return memcmp(data, "browser", 7) == 0;
+
+}
+
 
 
 void screenshotToFile(Display *display, char *fileName, Window window) {
@@ -195,76 +176,52 @@ void printProperties(Display *display, Window window) {
 }
 
 
-uint8_t isBrowser(Display *display, Window window) {
-
-    Atom atom = XInternAtom(display, "WM_WINDOW_ROLE", 1);
-    if (atom == None) return 0;
-
-    Atom type;
-    int format;
-    unsigned long nitems;
-    unsigned long remaining;
-    unsigned char *data;
-
-    XGetWindowProperty(
-        display,
-        window,
-        atom,
-        0, 32, 0,
-        AnyPropertyType,
-        &type,
-        &format,
-        &nitems,
-        &remaining,
-        &data
-    );
-    if (nitems != 7) return 0;
-    return memcmp(data, "browser", 7) == 0;
-
-}
-
-Window findBrowser(Display *display, Window root, int depth) {
-    Window idc1, idc2;
-    Window *kids;
-    uint32_t kidCount = 0;
-    XQueryTree(display, root, &idc1, &idc2, &kids, &kidCount);
-
-    for (uint32_t d = 0; d < depth; d++) printf("\t");
-    printf("has %d kids\n", kidCount);
+void printKids(Display *display, Window *kids, uint32_t kidCount, uint32_t depth) {
 
     for (uint32_t i = 0; i < kidCount; i++) {
+        XWindowAttributes attrs;
+        XGetWindowAttributes(display, kids[i], &attrs);
 
-        for (uint32_t d = 0; d < depth; d++) printf("\t");
-        printf("kid %d [%lx]: ", i, kids[i]);
-        if (isBrowser(display, kids[i])) {
-            printf("it a brows!!\n");
-            return kids[i];
+        for (uint32_t d = 0; d < depth; d++) fprintf(stderr, "\t");
+        fprintf(stderr, "Kid \x1b[33m%d\x1b[0m: ", i);
+
+
+        // Name
+        char *name;
+        XFetchName(display, kids[i], &name);
+
+        fprintf(stderr, "\"\x1b[34m%s\x1b[0m\" (%lx) ", name, kids[i]);
+        if (attrs.class == InputOutput) fprintf(stderr, "[\x1b[32mINOUT\x1b[0m] ");
+        free(name);
+
+#ifdef PRINT_PROPERTIES_IN_TREE
+        int propertiesCount;
+        Atom *properties = XListProperties(display, kids[i], &propertiesCount);
+        fprintf(stderr, "properties:\n");
+        for (int p = 0; p < propertiesCount; p++) {
+            for (uint32_t d = 0; d < depth + 1; d++) fprintf(stderr, "\t");
+            char *atomName = XGetAtomName(display, properties[p]);
+            fprintf(stderr, "[%s]\n", atomName);
         }
-        printf("Not a brows :( \n");
+#endif
 
+        Window idc1, idc2;
+        Window *kidsKids;
+        uint32_t kidsKidCount = 0;
+        XQueryTree(display, kids[i], &idc1, &idc2, &kidsKids, &kidsKidCount);
 
-        Window potentialBrowser = findBrowser(display, kids[i], depth + 1);
-        if (potentialBrowser != 0) return potentialBrowser;
+        if (kidsKidCount > 0) {
+#ifdef PRINT_PROPERTIES_IN_TREE
+            for (uint32_t d = 0; d < depth; d++) fprintf(stderr, "\t");
+#endif
+            printf("has %d kids:\n", kidsKidCount);
+            printKids(display, kidsKids, kidsKidCount, depth + 1);
+        }
+#ifndef PRINT_PROPERTIES_IN_TREE
+        else printf("\n");
+#endif
+
+        XFree(kidsKids);
+
     }
-
-    XFree(kids);
-    return 0;
-}
-
-
-
-int main(int argc, char *argv[]) {
-    setbuf(stderr, NULL);
-    setbuf(stdout, NULL);
-    Display *display = XOpenDisplay(NULL);
-    Window root = DefaultRootWindow(display);
-
-    Window viv = findBrowser(display, root, 0);
-
-    // printProperties(display, viv);
-
-    screenshotToFile(display, "screenshot.ppm", viv);
-
-
-    return 0;
 }
