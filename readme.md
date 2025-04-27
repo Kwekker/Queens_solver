@@ -10,6 +10,19 @@ Still only uses the following techniques:
 For now, it has a lot of difficulty with [game 333](games/game333.txt) (me too).
 
 
+## Implemented rules
+- Rule of 1 celled set = Queen
+- Rule of cell blocking a set = not a Queen
+
+## Rules to be implemented
+- If n columns or rows contain cells in exactly n groups,
+  the queens of said groups can only land within these columns/rows.
+- If n groups have cells within exactly n columns or rows,
+  the queens of said columns/rows can only land within said groups.
+
+- Rule of only 1 solution. (Not sure if I will add this one. It's basically, if there is the *possibility* of a stalemate that has only 1 resolution, that resolution is correct.)
+
+
 
 ## Unaccounted for situations
 This situation is unaccounted for:

@@ -1,227 +1,281 @@
-#include "seeer.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdint.h>
 
-// gcc -o seeer seeer.c -Wall -lX11
-
-#define PRINT_PROPERTIES_IN_TREE
-
-
-static void printKids(Display *display, Window *kids, uint32_t kidCount, uint32_t depth);
-static void screenshotToFile(Display *display, char *fileName, Window window);
-static void printProperties(Display *display, Window window);
-static uint8_t isBrowser(Display *display, Window window);
+#include "seeer.h"
+#include "looker.h"
+#include "debug_prints.h"
 
 
-Window findBrowser(Display *display, Window root, int depth) {
-    Window idc1, idc2;
-    Window *kids;
-    uint32_t kidCount = 0;
-    XQueryTree(display, root, &idc1, &idc2, &kids, &kidCount);
+#define BLACK (pixel_t){.r = 0, .g = 0, .b = 0}
+#define WHITE (pixel_t){.r = 255, .g = 255, .b = 255}
 
-    for (uint32_t d = 0; d < depth; d++) printf("\t");
-    printf("has %d kids\n", kidCount);
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+} coord_t;
 
-    for (uint32_t i = 0; i < kidCount; i++) {
+static inline uint16_t sum(pixel_t pixel);
+static inline pixel_t* getPix(image_t img, uint32_t x, uint32_t y);
+static uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset);
+static uint32_t getPoints(image_t img, coord_t **points, int pixelOffset);
 
-        for (uint32_t d = 0; d < depth; d++) printf("\t");
-        printf("kid %d [%lx]: ", i, kids[i]);
-        if (isBrowser(display, kids[i])) {
-            printf("it a brows!!\n");
-            return kids[i];
-        }
-        printf("Not a brows :( \n");
+int compare_ints(const void *a_ptr, const void *b_ptr) {
+    const uint32_t a = *((uint32_t *) a_ptr);
+    const uint32_t b = *((uint32_t *) b_ptr);
 
-
-        Window potentialBrowser = findBrowser(display, kids[i], depth + 1);
-        if (potentialBrowser != 0) return potentialBrowser;
-    }
-
-    XFree(kids);
+    if (a < b) return -1;
+    if (a > b) return 1;
     return 0;
 }
 
 
-uint8_t isBrowser(Display *display, Window window) {
+//TODO: Give pixelOffset a better name
+void filter(image_t img, int pixelOffset) {
 
-    Atom atom = XInternAtom(display, "WM_WINDOW_ROLE", 1);
-    if (atom == None) return 0;
+    DPRINTF("Getting points :)\n");
+    coord_t *points;
+    uint32_t pointCount = getPoints(img, &points, pixelOffset);
 
-    Atom type;
-    int format;
-    unsigned long nitems;
-    unsigned long remaining;
-    unsigned char *data;
-
-    XGetWindowProperty(
-        display,
-        window,
-        atom,
-        0, 32, 0,
-        AnyPropertyType,
-        &type,
-        &format,
-        &nitems,
-        &remaining,
-        &data
-    );
-    if (nitems != 7) return 0;
-    return memcmp(data, "browser", 7) == 0;
-
-}
+    // We need at least a 5x5 board  (4x4 Queens is impossible).
+    if (pointCount < 16) {
+        free(points);
+        printf("No board detected, or the board is too small.\n");
+        return ;
+    }
+    return;
+    DPRINTF("Found %u points!!!\n", pointCount);
 
 
+    //! The points aren't in the right order!!! shit!!!
+    //! FUck!!! Try to sort them??? Maybe???
+    //! Honestly you only need the top left point,
+    //! but finding the entire board is necesarry for measuring its size.
+    //! Maybe put like the points in bins or something based on their x and y.
+    //! Like go through the points, see if you've seen that particular x or y
+    //! value before, and store that or something. You only need as much
+    //! of those bins as the amount of points, so that's nice I guess.
 
-void screenshotToFile(Display *display, char *fileName, Window window) {
-    XWindowAttributes gwa;
-    XGetWindowAttributes(display, window, &gwa);
-    int width = gwa.width;
-    int height = gwa.height;
+    // Find the median positive horizontal offset.
+    int32_t *offsets = malloc(pointCount * sizeof(int32_t));
+    int32_t offsets_i = 0;
 
-    if (gwa.class == InputOnly) {
-        printf("this fucker is InputOnly!\n");
-        return;
+    for (int32_t i = 1; i < pointCount; i++) {
+
+        int32_t offset = points[i].x - points[i - 1].x;
+        // We only care about the X offset for now.
+        if (offset < 0) continue;
+        offsets[offsets_i] = offset;
     }
 
-    printf("getting image of [%d, %d]\n", width, height);
-    XImage *image =
-        XGetImage(display, window, 0, 0, width, height, AllPlanes, ZPixmap);
+    qsort(offsets, offsets_i, sizeof(int32_t), compare_ints);
+    int32_t medianOffset = offsets[offsets_i / 2];
+    DPRINTF("Nominal offset: %d\n", medianOffset);
 
-    if (image == NULL) {
-        printf("Window is cringe\n");
-        return;
+    free(offsets);
+
+
+    // Count the points, and remove the points that aren't in the board.
+    // TODO: Expand this to find all offset chains,
+    // TODO: and take the one that occurs the most.
+
+    // Keep track of whether we've set the size.
+    uint8_t setSize = 0;
+    uint32_t size = 0;
+    uint8_t prevCorrectOffset = 0;
+    uint32_t filteredPointsIndex = 0;
+
+    DPRINTF("Point 0 is [%4d, %4d]\n", points[0].x, points[0].y);
+
+    for (uint32_t i = 0; i < pointCount - 1; i++) {
+        int32_t offset = points[i + 1].x - points[i].x;
+        uint8_t correctOffset = abs(offset - medianOffset) < MAX_OFFSET_ERROR;
+
+        if (correctOffset || prevCorrectOffset) {
+            points[filteredPointsIndex] = points[i];
+            filteredPointsIndex++;
+            DPRINTF("Added point [%4d, %4d]\n", points[i].x, points[i].y);
+        }
+        else DPRINTF("Not adding point [%4d, %4d]\n", points[i].x, points[i].y);
+
+        prevCorrectOffset = correctOffset;
+
+        // Start counting at the first occurrence of the offset.
+        if (!setSize && correctOffset) size++;
+        else if (!setSize && size && !correctOffset) {
+            setSize = 1;
+        }
+
     }
-    printf("got image\n");
 
+    //TODO: This is a bodge
+    if (filteredPointsIndex == (size + 1) * (size + 1) - 1) {
+        DPRINTF("Adding last point..\n");
+        points[filteredPointsIndex++] = points[pointCount - 1];
+    }
 
-    FILE *file = fopen(fileName, "w");
+    // Add one because we're counting the crossings in between the cells.
+    // Add one because we're counting distances between those crossings.
+    size += 2;
+    pointCount = filteredPointsIndex;
 
-    unsigned char *array = malloc(width * height * 3);
+    DPRINTF("Board size is %d\n", size);
 
-    unsigned long red_mask = image->red_mask;
-    unsigned long green_mask = image->green_mask;
-    unsigned long blue_mask = image->blue_mask;
+    if (pointCount != (size - 1) * (size - 1)) {
+        printf("Points count (%u) and board size (%d) do not match up!!! Abort!!!\n",
+            pointCount, size - 1
+        );
+    }
 
-    fprintf(file, "P6\n%d\n%d\n255\n", width, height);
+    coord_t topLeftPoint = points[0];
+    printf("Top left point is [%d %d]\n", topLeftPoint.x, topLeftPoint.y);
 
-    for (int y = 0; y < height; y++) {
-        for (int x = 0; x < width; x++) {
-            unsigned long pixel = image->f.get_pixel(image, x, y);
-
-            unsigned char blue = pixel & blue_mask;
-            unsigned char green = (pixel & green_mask) >> 8;
-            unsigned char red = (pixel & red_mask) >> 16;
-
-            unsigned char rgb[3] = {red, green, blue};
-
-            array[(x + width * y) * 3] = red;
-            array[(x + width * y) * 3 + 1] = green;
-            array[(x + width * y) * 3 + 2] = blue;
-
-            fwrite(rgb, 1, 3, file);
+    for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t x = 0; x < size; x++) {
+            pixel_t *p =
+                &img.pixels[topLeftPoint.x + topLeftPoint.y * img.width];
+            p->r = 255;
+            p->g = 0;
+            p->b = 255;
         }
     }
 
-    fclose(file);
+    for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t x = 0; x < size; x++) {
+            points[y * size + x] = (coord_t){
+                topLeftPoint.x + x * medianOffset - medianOffset / 2,
+                topLeftPoint.y + y * medianOffset - medianOffset / 2,
+            };
+        }
+    }
 
-    free(array);
-}
 
+    uint32_t colors_i = 0;
+    pixel_t colors[size];
 
-void printProperties(Display *display, Window window) {
-    int propertiesCount;
-    Atom *properties = XListProperties(display, window, &propertiesCount);
-    fprintf(stderr, "properties:\n");
-    for (int p = 0; p < propertiesCount; p++) {
-        char *atomName = XGetAtomName(display, properties[p]);
-
-        Atom type;
-        int format;
-        unsigned long nitems;
-        unsigned long remaining;
-        unsigned char *data;
-
-        XGetWindowProperty(
-            display,
-            window,
-            properties[p],
-            0, 32, 0,
-            AnyPropertyType,
-            &type,
-            &format,
-            &nitems,
-            &remaining,
-            &data
+    for (uint32_t i = 0; i < pointCount; i++) {
+        pixel_t *pixel = getPix(img,
+            points[i].x - medianOffset/2,
+            points[i].y - medianOffset/2
         );
 
-        fprintf(stderr, "[%s]\n\t", atomName);
-        for (int i = 0; i < 32; i++) {
-            fprintf(stderr, "%2x ", data[i]);
-        }
-        fprintf(stderr, "\n\t");
-        for (int i = 0; i < 32; i++) {
-            if(data[i] > ' ' && data[i] < 0x7f)
-                fprintf(stderr, " %c ", data[i]);
-            else if (data[i] == ' ')
-                fprintf(stderr, " \x1b[31m_\x1b[0m ");
-            else
-                fprintf(stderr, "   ");
-        }
-        fprintf(stderr, "\n%lu, %d, %lu, %lu\n", type, format, nitems, remaining);
 
+        // Check if color already found.
+        uint8_t colorFound = 0;
+        for (uint32_t c = 0; c < colors_i; c++) {
+            if (memcmp(colors + c, pixel, sizeof(pixel_t)) == 0) {
+                colorFound = 1;
+            }
+        }
+        if (colorFound) continue;
+
+
+        if (colors_i >= size) {
+            printf("FUCK there are more colors than queens.\n");
+            break;
+        }
+        colors[colors_i++] = *pixel;
+        pixel->r = 255;
     }
+
+    if (colors_i != size) {
+        printf("There are too few colors!!!\n");
+    }
+
+
+    for (uint32_t i = 0; i < colors_i; i++) {
+        printf("Color %d: #%02x%02x%02x  #%02x%02x%02x  #%02x%02x%02x\n", i,
+            colors[i].r, colors[i].g, colors[i].b,
+            colors[i].b, colors[i].g, colors[i].r,
+            colors[i].g, colors[i].r, colors[i].b
+        );
+    }
+
+
+    free(points);
+}
+
+uint32_t getPoints(image_t img, coord_t **points, int pixelOffset) {
+    const uint32_t offset = 20;
+
+    coord_t *coords = malloc(32 * sizeof(coord_t));
+    uint32_t coords_n = 32;
+    uint32_t coords_i = 0;
+
+    for (uint32_t y = offset; y < img.height - offset; y++) {
+        for (uint32_t x = offset; x < img.width - offset; x++) {
+
+            pixel_t *pix = getPix(img, x, y);
+
+            // Did we find a discrepancy?
+            if (isCrossing(img, pix, pixelOffset)) {
+                if (coords_i == coords_n) {
+                    coords_n += 32;
+                    coords = realloc(coords, coords_n * sizeof(coord_t));
+                }
+                coords[coords_i] = (coord_t){x, y};
+                coords_i++;
+            }
+            else if (pix->g == 255) pix->g = 254;
+        }
+    }
+
+    if (coords_i == 0) {
+        free(coords);
+        *points = NULL;
+        return 0;
+    }
+
+    coords = realloc(coords, coords_i * sizeof(coord_t));
+    *points = coords;
+
+    return coords_i;
 }
 
 
-void printKids(Display *display, Window *kids, uint32_t kidCount, uint32_t depth) {
-
-    for (uint32_t i = 0; i < kidCount; i++) {
-        XWindowAttributes attrs;
-        XGetWindowAttributes(display, kids[i], &attrs);
-
-        for (uint32_t d = 0; d < depth; d++) fprintf(stderr, "\t");
-        fprintf(stderr, "Kid \x1b[33m%d\x1b[0m: ", i);
-
-
-        // Name
-        char *name;
-        XFetchName(display, kids[i], &name);
-
-        fprintf(stderr, "\"\x1b[34m%s\x1b[0m\" (%lx) ", name, kids[i]);
-        if (attrs.class == InputOutput) fprintf(stderr, "[\x1b[32mINOUT\x1b[0m] ");
-        free(name);
-
-#ifdef PRINT_PROPERTIES_IN_TREE
-        int propertiesCount;
-        Atom *properties = XListProperties(display, kids[i], &propertiesCount);
-        fprintf(stderr, "properties:\n");
-        for (int p = 0; p < propertiesCount; p++) {
-            for (uint32_t d = 0; d < depth + 1; d++) fprintf(stderr, "\t");
-            char *atomName = XGetAtomName(display, properties[p]);
-            fprintf(stderr, "[%s]\n", atomName);
-        }
-#endif
-
-        Window idc1, idc2;
-        Window *kidsKids;
-        uint32_t kidsKidCount = 0;
-        XQueryTree(display, kids[i], &idc1, &idc2, &kidsKids, &kidsKidCount);
-
-        if (kidsKidCount > 0) {
-#ifdef PRINT_PROPERTIES_IN_TREE
-            for (uint32_t d = 0; d < depth; d++) fprintf(stderr, "\t");
-#endif
-            printf("has %d kids:\n", kidsKidCount);
-            printKids(display, kidsKids, kidsKidCount, depth + 1);
-        }
-#ifndef PRINT_PROPERTIES_IN_TREE
-        else printf("\n");
-#endif
-
-        XFree(kidsKids);
-
+// Finds the crossing and also fucks up the green channel of the image.
+uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset) {
+    if (
+           (pix - 1)->g == 255
+        || (pix - img.width)->g == 255
+        || (pix - 1 - img.width)->g == 255
+    ) {
+        if (pix->g == 255) pix->g = 254;
+        return 0;
     }
+
+    uint8_t conv[3][3] = {
+        {1, 0, 1},
+        {0, 0, 0},
+        {1, 0, 1}
+    };
+
+    // Loop until we find a discrepancy
+    for (int cy = -1; cy <= 1; cy++) {
+        for (int cx = -1; cx <= 1; cx++) {
+
+            int32_t offset = pixelOffset * cx + (pixelOffset * cy * img.width);
+            pixel_t *pixPtr = pix + offset;
+
+            pixel_t testPix = *pixPtr;
+
+            if (!!sum(testPix) != conv[cy + 1][cx + 1]) {
+                return 0;
+            }
+
+        }
+    }
+
+    pix->g = 255;
+    return 1;
+}
+
+
+static inline uint16_t sum(pixel_t pixel) {
+    return pixel.r + pixel.g + pixel.b;
+}
+
+
+static inline pixel_t* getPix(image_t img, uint32_t x, uint32_t y) {
+    return img.pixels + (x + y * img.width);
 }

@@ -2,7 +2,7 @@
 
 
 all: *.c
-	gcc -g *.c -o queens -Wall
+	gcc -g *.c -o queens -Wall -lX11
 
 fast: *.c
 	gcc *.c -o queens -Wall
