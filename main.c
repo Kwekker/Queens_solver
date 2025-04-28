@@ -13,12 +13,16 @@
 int main(int argc, char *argv[]) {
 
     setbuf(stdout, NULL);
-
     image_t image = getBrowserWindow();
-    detectBoard(image, NULL, atoi(argv[1]));
+    uint32_t *boardGroups;
+    detectBoard(image, &boardGroups, atoi(argv[1]));
+
     if (argc > 2 && strcmp(argv[2], "export") == 0)
         imageToFile("img/eendje.ppm", image.pixels, image.width, image.height);
+
+
     free(image.pixels);
+    free(boardGroups);
 
     return 0;
 

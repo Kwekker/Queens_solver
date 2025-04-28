@@ -36,7 +36,13 @@ static uint32_t getPoints(image_t img, coord_t **points, int pixelOffset);
 static inline uint16_t sum(pixel_t pixel);
 static inline uint8_t isBlack(pixel_t pixel);
 
-static uint32_t *findColors(bin_t *xBins, bin_t *yBins, uint32_t size);
+static uint32_t *findColors(image_t img, bin_t *xBins, bin_t *yBins, uint32_t size);
+static coord_t getBins(
+    coord_t *points, uint32_t pointCount, bin_t *xBins, bin_t *yBins
+);
+static void sanitizeBins(
+    bin_t *xBins, uint32_t *xBins_i, bin_t *yBins, uint32_t *yBins_i
+);
 
 int compare_bins(const void *a_ptr, const void *b_ptr) {
     const bin_t a = *((bin_t *) a_ptr);
@@ -68,175 +74,27 @@ uint32_t detectBoard(image_t img, uint32_t **board, int crossingOffset) {
     // Put the point coordinates into bins.
     bin_t *xBins = malloc(pointCount * sizeof(bin_t));
     bin_t *yBins = malloc(pointCount * sizeof(bin_t));
-    uint32_t xBins_i = 0;
-    uint32_t yBins_i = 0;
 
     printf("Getting bins.\n");
-
-    for (uint32_t p = 0; p < pointCount; p++) {
-
-        uint8_t newXBin = 1;
-        for (uint32_t bin = 0; bin < xBins_i; bin++) {
-            int32_t dif = abs(xBins[bin].coordinate - (int32_t)points[p].x);
-            if (dif < BIN_MARGIN) {
-                xBins[bin].count++;
-                newXBin = 0;
-                break;
-            }
-        }
-        if (newXBin) {
-            xBins[xBins_i].coordinate = points[p].x;
-            xBins[xBins_i].count = 1;
-            xBins_i++;
-        }
-
-        uint8_t newYBin = 1;
-        for (uint32_t bin = 0; bin < yBins_i; bin++) {
-            int32_t dif = abs(yBins[bin].coordinate - (int32_t)points[p].y);
-            if (dif < BIN_MARGIN) {
-                yBins[bin].count++;
-                newYBin = 0;
-                break;
-            }
-        }
-        if (newYBin) {
-            yBins[yBins_i].coordinate = points[p].y;
-            yBins[yBins_i].count = 1;
-            yBins_i++;
-        }
-    }
+    coord_t binCounts = getBins(points, pointCount, xBins, yBins);
+    uint32_t xBins_n = binCounts.x;
+    uint32_t yBins_n = binCounts.y;
 
     printf("xBins: ");
-    for (uint32_t i = 0; i < xBins_i; i++) {
-        printf("[%d: %d] ", xBins[i].coordinate, xBins[i].count);
-
-        // Invalid bin. Probably some other crossing.
-        if (xBins[i].count < 3) {
-            xBins[i] = xBins[xBins_i - 1];
-            xBins_i--;
-            i--;
-            continue;
-        }
-    }
-    printf("\nyBins: ");
-    for (uint32_t i = 0; i < yBins_i; i++) {
-        printf("[%d: %d] ", yBins[i].coordinate, yBins[i].count);
-
-        // Invalid bin. Probably some other crossing.
-        if (yBins[i].count < 3) {
-            yBins[i] = yBins[yBins_i - 1];
-            yBins_i--;
-            i--;
-            continue;
-        }
-    }
-
-
-    // Weird situation alert
-    while (xBins_i != yBins_i) {
-        bin_t *badBins;
-        uint32_t *badBins_i;
-
-        if (xBins_i > yBins_i) {
-            badBins = xBins;
-            badBins_i = &xBins_i;
-        }
-        else {
-            badBins = yBins;
-            badBins_i = &yBins_i;
-        }
-
-        uint32_t minBin = badBins[0].count;
-        uint32_t minBin_i = 0;
-
-        for (uint32_t i = 1; i < MAX(xBins_i, yBins_i); i++) {
-            if (badBins[i].count < minBin) {
-                minBin = badBins[i].count;
-                minBin_i = i;
-            }
-        }
-
-        badBins[minBin_i] = badBins[*badBins_i];
-        *badBins_i -= 1;
-    }
-
-
-    printf("\nSorting them...\n");
-    qsort(xBins, xBins_i, sizeof(bin_t), compare_bins);
-    qsort(yBins, yBins_i, sizeof(bin_t), compare_bins);
-
-
-    printf("xBins: ");
-    for (uint32_t i = 0; i < xBins_i; i++) {
+    for (uint32_t i = 0; i < xBins_n; i++) {
         printf("[%d: %d] ", xBins[i].coordinate, xBins[i].count);
 
     }
     printf("\nyBins: ");
-    for (uint32_t i = 0; i < yBins_i; i++) {
+    for (uint32_t i = 0; i < yBins_n; i++) {
         printf("[%d: %d] ", yBins[i].coordinate, yBins[i].count);
 
     }
     printf("\n");
 
-    uint32_t size = xBins_i;
+    uint32_t size = xBins_n;
 
-    uint32_t cellDistance = xBins[1].coordinate - xBins[0].coordinate;
-
-    // ====================== Color finding ====================================
-
-
-    uint32_t colors_i = 0;
-    pixel_t colors[size];
-
-    coord_t origin = (coord_t){
-        xBins[0].coordinate - cellDistance / 2,
-        yBins[0].coordinate - cellDistance / 2
-    };
-
-    // *board = findColors(bin_t *xBins, bin_t yBins, uint32_t size);
-
-    for (uint32_t y = 0; y < size; y++) {
-        for (uint32_t x = 0; x < size; x++) {
-            pixel_t *pixel = getPix(img,
-                origin.x + cellDistance * x,
-                origin.y + cellDistance * y
-            );
-
-            // Check if color already found.
-            uint8_t colorFound = 0;
-            for (uint32_t c = 0; c < colors_i; c++) {
-                if (memcmp(colors + c, pixel, sizeof(pixel_t)) == 0) {
-                    colorFound = 1;
-                }
-            }
-            if (colorFound) continue;
-
-
-            if (colors_i >= size) {
-                printf("FUCK there are more colors than queens.\n");
-
-                goto stop_finding_colors;
-            }
-            colors[colors_i++] = *pixel;
-            pixel->r = 255;
-        }
-    }
-
-    stop_finding_colors:
-
-    if (colors_i != size) {
-        printf("There are too few colors!!!\n");
-    }
-
-
-    for (uint32_t i = 0; i < colors_i; i++) {
-        printf("Color %d: #%02x%02x%02x  #%02x%02x%02x  #%02x%02x%02x\n", i,
-            colors[i].r, colors[i].g, colors[i].b,
-            colors[i].b, colors[i].g, colors[i].r,
-            colors[i].g, colors[i].r, colors[i].b
-        );
-    }
-
+    *board = findColors(img, xBins, yBins, size);
 
     free(points);
     free(xBins);
@@ -329,6 +187,180 @@ uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset) {
     pix->b /= 2;
     return 1;
 }
+
+
+coord_t getBins(
+    coord_t *points, uint32_t pointCount, bin_t *xBins, bin_t *yBins
+) {
+    uint32_t xBins_i = 0;
+    uint32_t yBins_i = 0;
+
+    for (uint32_t p = 0; p < pointCount; p++) {
+
+        uint8_t newXBin = 1;
+        for (uint32_t bin = 0; bin < xBins_i; bin++) {
+            int32_t dif = abs(xBins[bin].coordinate - (int32_t)points[p].x);
+            if (dif < BIN_MARGIN) {
+                xBins[bin].count++;
+                newXBin = 0;
+                break;
+            }
+        }
+        if (newXBin) {
+            xBins[xBins_i].coordinate = points[p].x;
+            xBins[xBins_i].count = 1;
+            xBins_i++;
+        }
+
+        uint8_t newYBin = 1;
+        for (uint32_t bin = 0; bin < yBins_i; bin++) {
+            int32_t dif = abs(yBins[bin].coordinate - (int32_t)points[p].y);
+            if (dif < BIN_MARGIN) {
+                yBins[bin].count++;
+                newYBin = 0;
+                break;
+            }
+        }
+        if (newYBin) {
+            yBins[yBins_i].coordinate = points[p].y;
+            yBins[yBins_i].count = 1;
+            yBins_i++;
+        }
+    }
+
+    sanitizeBins(xBins, &xBins_i, yBins, &yBins_i);
+
+    return (coord_t){xBins_i, yBins_i};
+}
+
+
+void sanitizeBins(
+    bin_t *xBins, uint32_t *xBins_i, bin_t *yBins, uint32_t *yBins_i
+) {
+
+    DPRINTF("xBins: ");
+    for (uint32_t i = 0; i < *xBins_i; i++) {
+        DPRINTF("[%d: %d] ", xBins[i].coordinate, xBins[i].count);
+
+        // Invalid bin. Probably some other crossing.
+        if (xBins[i].count < 3) {
+            xBins[i] = xBins[*xBins_i - 1];
+            *xBins_i -= 1;
+            i--;
+            continue;
+        }
+    }
+    DPRINTF("\nyBins: ");
+    for (uint32_t i = 0; i < *yBins_i; i++) {
+        DPRINTF("[%d: %d] ", yBins[i].coordinate, yBins[i].count);
+
+        // Invalid bin. Probably some other crossing.
+        if (yBins[i].count < 3) {
+            yBins[i] = yBins[*yBins_i - 1];
+            *yBins_i -= 1;
+            i--;
+            continue;
+        }
+    }
+
+    // Weird situation alert
+    while (*xBins_i != *yBins_i) {
+        bin_t *badBins;
+        uint32_t *badBins_i;
+
+        if (*xBins_i > *yBins_i) {
+            badBins = xBins;
+            badBins_i = &*xBins_i;
+        }
+        else {
+            badBins = yBins;
+            badBins_i = &*yBins_i;
+        }
+
+        uint32_t minBin = badBins[0].count;
+        uint32_t minBin_i = 0;
+
+        for (uint32_t i = 1; i < MAX(*xBins_i, *yBins_i); i++) {
+            if (badBins[i].count < minBin) {
+                minBin = badBins[i].count;
+                minBin_i = i;
+            }
+        }
+
+        badBins[minBin_i] = badBins[*badBins_i];
+        *badBins_i -= 1;
+    }
+
+
+    printf("\nSorting them...\n");
+    qsort(xBins, *xBins_i, sizeof(bin_t), compare_bins);
+    qsort(yBins, *yBins_i, sizeof(bin_t), compare_bins);
+}
+
+
+static uint32_t *findColors(image_t img, bin_t *xBins, bin_t *yBins, uint32_t size) {
+
+    uint32_t cellDistance = xBins[1].coordinate - xBins[0].coordinate;
+    uint32_t colors_i = 0;
+    pixel_t colors[size];
+
+    coord_t origin = (coord_t){
+        xBins[0].coordinate - cellDistance / 2,
+        yBins[0].coordinate - cellDistance / 2
+    };
+
+    uint32_t *board = malloc(size * size * sizeof(uint32_t));
+
+    for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t x = 0; x < size; x++) {
+            pixel_t *pixel = getPix(img,
+                origin.x + cellDistance * x,
+                origin.y + cellDistance * y
+            );
+
+            // Check if color already found.
+            uint8_t colorFound = 0;
+            for (uint32_t c = 0; c < colors_i; c++) {
+                if (memcmp(colors + c, pixel, sizeof(pixel_t)) == 0) {
+                    colorFound = 1;
+                    board[x + y * size] = c;
+                    break;
+                }
+            }
+            if (colorFound) {
+                continue;
+            }
+
+
+            if (colors_i >= size) {
+                printf("FUCK there are more colors than queens.\n");
+                free(board);
+                return NULL;
+            }
+            board[x + y * size] = colors_i;
+            colors[colors_i++] = *pixel;
+            pixel->r = 255;
+        }
+    }
+
+
+    if (colors_i != size) {
+        printf("There are too few colors!!!\n");
+        free(board);
+        return NULL;
+    }
+
+    for (uint32_t i = 0; i < colors_i; i++) {
+        printf("Color %d: #%02x%02x%02x  #%02x%02x%02x  #%02x%02x%02x\n", i,
+            colors[i].r, colors[i].g, colors[i].b,
+            colors[i].b, colors[i].g, colors[i].r,
+            colors[i].g, colors[i].r, colors[i].b
+        );
+    }
+
+    return board;
+}
+
 
 static inline uint8_t isBlack(pixel_t pixel) {
     return pixel.r < BLACK_THRESHOLD
