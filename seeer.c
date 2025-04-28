@@ -6,6 +6,14 @@
 #include "looker.h"
 #include "debug_prints.h"
 
+#define MIN(i, j) (((i) < (j)) ? (i) : (j))
+#define MAX(i, j) (((i) > (j)) ? (i) : (j))
+
+
+// Very arbitrary value. Should be more than 3,
+// should never come close to 100.
+#define BIN_MARGIN 12
+
 
 #define BLACK (pixel_t){.r = 0, .g = 0, .b = 0}
 #define WHITE (pixel_t){.r = 255, .g = 255, .b = 255}
@@ -15,168 +23,206 @@ typedef struct {
     uint32_t y;
 } coord_t;
 
-static inline uint16_t sum(pixel_t pixel);
+
+typedef struct {
+    int32_t coordinate;
+    uint32_t count;
+} bin_t;
+
+
 static inline pixel_t* getPix(image_t img, uint32_t x, uint32_t y);
 static uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset);
 static uint32_t getPoints(image_t img, coord_t **points, int pixelOffset);
+static inline uint16_t sum(pixel_t pixel);
+static inline uint8_t isBlack(pixel_t pixel);
 
-int compare_ints(const void *a_ptr, const void *b_ptr) {
-    const uint32_t a = *((uint32_t *) a_ptr);
-    const uint32_t b = *((uint32_t *) b_ptr);
+static uint32_t *findColors(bin_t *xBins, bin_t *yBins, uint32_t size);
 
-    if (a < b) return -1;
-    if (a > b) return 1;
+int compare_bins(const void *a_ptr, const void *b_ptr) {
+    const bin_t a = *((bin_t *) a_ptr);
+    const bin_t b = *((bin_t *) b_ptr);
+
+    if (a.coordinate < b.coordinate) return -1;
+    if (a.coordinate > b.coordinate) return 1;
     return 0;
 }
 
 
 //TODO: Give pixelOffset a better name
-void filter(image_t img, int pixelOffset) {
+uint32_t detectBoard(image_t img, uint32_t **board, int crossingOffset) {
 
     DPRINTF("Getting points :)\n");
     coord_t *points;
-    uint32_t pointCount = getPoints(img, &points, pixelOffset);
+    uint32_t pointCount = getPoints(img, &points, crossingOffset);
 
     // We need at least a 5x5 board  (4x4 Queens is impossible).
     if (pointCount < 16) {
         free(points);
         printf("No board detected, or the board is too small.\n");
-        return ;
+        return 0;
     }
-    return;
+
+
     DPRINTF("Found %u points!!!\n", pointCount);
 
+    // Put the point coordinates into bins.
+    bin_t *xBins = malloc(pointCount * sizeof(bin_t));
+    bin_t *yBins = malloc(pointCount * sizeof(bin_t));
+    uint32_t xBins_i = 0;
+    uint32_t yBins_i = 0;
 
-    //! The points aren't in the right order!!! shit!!!
-    //! FUck!!! Try to sort them??? Maybe???
-    //! Honestly you only need the top left point,
-    //! but finding the entire board is necesarry for measuring its size.
-    //! Maybe put like the points in bins or something based on their x and y.
-    //! Like go through the points, see if you've seen that particular x or y
-    //! value before, and store that or something. You only need as much
-    //! of those bins as the amount of points, so that's nice I guess.
+    printf("Getting bins.\n");
 
-    // Find the median positive horizontal offset.
-    int32_t *offsets = malloc(pointCount * sizeof(int32_t));
-    int32_t offsets_i = 0;
+    for (uint32_t p = 0; p < pointCount; p++) {
 
-    for (int32_t i = 1; i < pointCount; i++) {
-
-        int32_t offset = points[i].x - points[i - 1].x;
-        // We only care about the X offset for now.
-        if (offset < 0) continue;
-        offsets[offsets_i] = offset;
-    }
-
-    qsort(offsets, offsets_i, sizeof(int32_t), compare_ints);
-    int32_t medianOffset = offsets[offsets_i / 2];
-    DPRINTF("Nominal offset: %d\n", medianOffset);
-
-    free(offsets);
-
-
-    // Count the points, and remove the points that aren't in the board.
-    // TODO: Expand this to find all offset chains,
-    // TODO: and take the one that occurs the most.
-
-    // Keep track of whether we've set the size.
-    uint8_t setSize = 0;
-    uint32_t size = 0;
-    uint8_t prevCorrectOffset = 0;
-    uint32_t filteredPointsIndex = 0;
-
-    DPRINTF("Point 0 is [%4d, %4d]\n", points[0].x, points[0].y);
-
-    for (uint32_t i = 0; i < pointCount - 1; i++) {
-        int32_t offset = points[i + 1].x - points[i].x;
-        uint8_t correctOffset = abs(offset - medianOffset) < MAX_OFFSET_ERROR;
-
-        if (correctOffset || prevCorrectOffset) {
-            points[filteredPointsIndex] = points[i];
-            filteredPointsIndex++;
-            DPRINTF("Added point [%4d, %4d]\n", points[i].x, points[i].y);
+        uint8_t newXBin = 1;
+        for (uint32_t bin = 0; bin < xBins_i; bin++) {
+            int32_t dif = abs(xBins[bin].coordinate - (int32_t)points[p].x);
+            if (dif < BIN_MARGIN) {
+                xBins[bin].count++;
+                newXBin = 0;
+                break;
+            }
         }
-        else DPRINTF("Not adding point [%4d, %4d]\n", points[i].x, points[i].y);
-
-        prevCorrectOffset = correctOffset;
-
-        // Start counting at the first occurrence of the offset.
-        if (!setSize && correctOffset) size++;
-        else if (!setSize && size && !correctOffset) {
-            setSize = 1;
+        if (newXBin) {
+            xBins[xBins_i].coordinate = points[p].x;
+            xBins[xBins_i].count = 1;
+            xBins_i++;
         }
 
-    }
-
-    //TODO: This is a bodge
-    if (filteredPointsIndex == (size + 1) * (size + 1) - 1) {
-        DPRINTF("Adding last point..\n");
-        points[filteredPointsIndex++] = points[pointCount - 1];
-    }
-
-    // Add one because we're counting the crossings in between the cells.
-    // Add one because we're counting distances between those crossings.
-    size += 2;
-    pointCount = filteredPointsIndex;
-
-    DPRINTF("Board size is %d\n", size);
-
-    if (pointCount != (size - 1) * (size - 1)) {
-        printf("Points count (%u) and board size (%d) do not match up!!! Abort!!!\n",
-            pointCount, size - 1
-        );
-    }
-
-    coord_t topLeftPoint = points[0];
-    printf("Top left point is [%d %d]\n", topLeftPoint.x, topLeftPoint.y);
-
-    for (uint32_t y = 0; y < size; y++) {
-        for (uint32_t x = 0; x < size; x++) {
-            pixel_t *p =
-                &img.pixels[topLeftPoint.x + topLeftPoint.y * img.width];
-            p->r = 255;
-            p->g = 0;
-            p->b = 255;
+        uint8_t newYBin = 1;
+        for (uint32_t bin = 0; bin < yBins_i; bin++) {
+            int32_t dif = abs(yBins[bin].coordinate - (int32_t)points[p].y);
+            if (dif < BIN_MARGIN) {
+                yBins[bin].count++;
+                newYBin = 0;
+                break;
+            }
+        }
+        if (newYBin) {
+            yBins[yBins_i].coordinate = points[p].y;
+            yBins[yBins_i].count = 1;
+            yBins_i++;
         }
     }
 
-    for (uint32_t y = 0; y < size; y++) {
-        for (uint32_t x = 0; x < size; x++) {
-            points[y * size + x] = (coord_t){
-                topLeftPoint.x + x * medianOffset - medianOffset / 2,
-                topLeftPoint.y + y * medianOffset - medianOffset / 2,
-            };
+    printf("xBins: ");
+    for (uint32_t i = 0; i < xBins_i; i++) {
+        printf("[%d: %d] ", xBins[i].coordinate, xBins[i].count);
+
+        // Invalid bin. Probably some other crossing.
+        if (xBins[i].count < 3) {
+            xBins[i] = xBins[xBins_i - 1];
+            xBins_i--;
+            i--;
+            continue;
         }
     }
+    printf("\nyBins: ");
+    for (uint32_t i = 0; i < yBins_i; i++) {
+        printf("[%d: %d] ", yBins[i].coordinate, yBins[i].count);
+
+        // Invalid bin. Probably some other crossing.
+        if (yBins[i].count < 3) {
+            yBins[i] = yBins[yBins_i - 1];
+            yBins_i--;
+            i--;
+            continue;
+        }
+    }
+
+
+    // Weird situation alert
+    while (xBins_i != yBins_i) {
+        bin_t *badBins;
+        uint32_t *badBins_i;
+
+        if (xBins_i > yBins_i) {
+            badBins = xBins;
+            badBins_i = &xBins_i;
+        }
+        else {
+            badBins = yBins;
+            badBins_i = &yBins_i;
+        }
+
+        uint32_t minBin = badBins[0].count;
+        uint32_t minBin_i = 0;
+
+        for (uint32_t i = 1; i < MAX(xBins_i, yBins_i); i++) {
+            if (badBins[i].count < minBin) {
+                minBin = badBins[i].count;
+                minBin_i = i;
+            }
+        }
+
+        badBins[minBin_i] = badBins[*badBins_i];
+        *badBins_i -= 1;
+    }
+
+
+    printf("\nSorting them...\n");
+    qsort(xBins, xBins_i, sizeof(bin_t), compare_bins);
+    qsort(yBins, yBins_i, sizeof(bin_t), compare_bins);
+
+
+    printf("xBins: ");
+    for (uint32_t i = 0; i < xBins_i; i++) {
+        printf("[%d: %d] ", xBins[i].coordinate, xBins[i].count);
+
+    }
+    printf("\nyBins: ");
+    for (uint32_t i = 0; i < yBins_i; i++) {
+        printf("[%d: %d] ", yBins[i].coordinate, yBins[i].count);
+
+    }
+    printf("\n");
+
+    uint32_t size = xBins_i;
+
+    uint32_t cellDistance = xBins[1].coordinate - xBins[0].coordinate;
+
+    // ====================== Color finding ====================================
 
 
     uint32_t colors_i = 0;
     pixel_t colors[size];
 
-    for (uint32_t i = 0; i < pointCount; i++) {
-        pixel_t *pixel = getPix(img,
-            points[i].x - medianOffset/2,
-            points[i].y - medianOffset/2
-        );
+    coord_t origin = (coord_t){
+        xBins[0].coordinate - cellDistance / 2,
+        yBins[0].coordinate - cellDistance / 2
+    };
 
+    // *board = findColors(bin_t *xBins, bin_t yBins, uint32_t size);
 
-        // Check if color already found.
-        uint8_t colorFound = 0;
-        for (uint32_t c = 0; c < colors_i; c++) {
-            if (memcmp(colors + c, pixel, sizeof(pixel_t)) == 0) {
-                colorFound = 1;
+    for (uint32_t y = 0; y < size; y++) {
+        for (uint32_t x = 0; x < size; x++) {
+            pixel_t *pixel = getPix(img,
+                origin.x + cellDistance * x,
+                origin.y + cellDistance * y
+            );
+
+            // Check if color already found.
+            uint8_t colorFound = 0;
+            for (uint32_t c = 0; c < colors_i; c++) {
+                if (memcmp(colors + c, pixel, sizeof(pixel_t)) == 0) {
+                    colorFound = 1;
+                }
             }
-        }
-        if (colorFound) continue;
+            if (colorFound) continue;
 
 
-        if (colors_i >= size) {
-            printf("FUCK there are more colors than queens.\n");
-            break;
+            if (colors_i >= size) {
+                printf("FUCK there are more colors than queens.\n");
+
+                goto stop_finding_colors;
+            }
+            colors[colors_i++] = *pixel;
+            pixel->r = 255;
         }
-        colors[colors_i++] = *pixel;
-        pixel->r = 255;
     }
+
+    stop_finding_colors:
 
     if (colors_i != size) {
         printf("There are too few colors!!!\n");
@@ -193,22 +239,28 @@ void filter(image_t img, int pixelOffset) {
 
 
     free(points);
+    free(xBins);
+    free(yBins);
+
+    return size;
 }
 
 uint32_t getPoints(image_t img, coord_t **points, int pixelOffset) {
-    const uint32_t offset = 20;
 
     coord_t *coords = malloc(32 * sizeof(coord_t));
     uint32_t coords_n = 32;
     uint32_t coords_i = 0;
 
-    for (uint32_t y = offset; y < img.height - offset; y++) {
-        for (uint32_t x = offset; x < img.width - offset; x++) {
+    const uint32_t margin = WINDOW_BORDER_MARGIN;
+
+    for (uint32_t y = margin; y < img.height - margin; y++) {
+        for (uint32_t x = margin; x < img.width - margin; x++) {
 
             pixel_t *pix = getPix(img, x, y);
 
             // Did we find a discrepancy?
             if (isCrossing(img, pix, pixelOffset)) {
+                // Expand the vector if it's too small.
                 if (coords_i == coords_n) {
                     coords_n += 32;
                     coords = realloc(coords, coords_n * sizeof(coord_t));
@@ -216,6 +268,8 @@ uint32_t getPoints(image_t img, coord_t **points, int pixelOffset) {
                 coords[coords_i] = (coord_t){x, y};
                 coords_i++;
             }
+            // We literally use the green pixels, so we can't have actual
+            // green pixels in the image.
             else if (pix->g == 255) pix->g = 254;
         }
     }
@@ -235,6 +289,8 @@ uint32_t getPoints(image_t img, coord_t **points, int pixelOffset) {
 
 // Finds the crossing and also fucks up the green channel of the image.
 uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset) {
+    // Check if the pixels above, to the left and to the top left of this pixel
+    // aren't already green.
     if (
            (pix - 1)->g == 255
         || (pix - img.width)->g == 255
@@ -244,10 +300,12 @@ uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset) {
         return 0;
     }
 
+
+    // 1 is black, 0 is not black.
     uint8_t conv[3][3] = {
-        {1, 0, 1},
-        {0, 0, 0},
-        {1, 0, 1}
+        {0, 1, 0},
+        {1, 1, 1},
+        {0, 1, 0}
     };
 
     // Loop until we find a discrepancy
@@ -259,7 +317,7 @@ uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset) {
 
             pixel_t testPix = *pixPtr;
 
-            if (!!sum(testPix) != conv[cy + 1][cx + 1]) {
+            if (isBlack(testPix) != conv[cy + 1][cx + 1]) {
                 return 0;
             }
 
@@ -267,7 +325,15 @@ uint8_t isCrossing(image_t img, pixel_t *pix, int pixelOffset) {
     }
 
     pix->g = 255;
+    pix->r /= 2;
+    pix->b /= 2;
     return 1;
+}
+
+static inline uint8_t isBlack(pixel_t pixel) {
+    return pixel.r < BLACK_THRESHOLD
+        && pixel.g < BLACK_THRESHOLD
+        && pixel.b < BLACK_THRESHOLD;
 }
 
 
