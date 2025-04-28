@@ -66,7 +66,7 @@ uint8_t solve(board_t board) {
     for (uint32_t i = 0; i < board.size; i++) {
         if (board.groups[i].cellCount != 1) {
             // Not solved yet.
-            DPRINTF("It's not solved yet because group %d has %ld cells.\n", i, board.groups[i].cellCount);
+            DPRINTF("It's not solved yet because group %d has %d cells.\n", i, board.groups[i].cellCount);
             return 0;
         }
     }
@@ -129,7 +129,6 @@ void isolate(cellSet_t *set, cell_t *cell) {
 // empty out a set of cells.
 // (Like, it blocks a group completely or something.)
 uint8_t checkCellBlocker(board_t board, cell_t *cell) {
-
     // Count amount of sets this cell is going to affect.
     size_t affectedSetCount = 3 * (
         cell->column->cellCount + cell->row->cellCount + cell->group->cellCount
@@ -143,17 +142,20 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
 
     uint8_t isBlocker = 0;
 
+
     // Iterate over every affected set.
     for (uint32_t s = 0; s < 3; s++) {
         for (uint32_t c = 0; c < cell->sets[s]->cellCount; c++) {
             cell_t *mCell = cell->sets[s]->cells[c];
-            if (mCell == cell)
+            if (mCell == cell) {
                 continue;
+            }
 
             if (markCell(cell, mCell, affectedSets, &affectedSet_i)) {
                 isBlocker = 1;
                 goto break_all;
             }
+
         }
     }
 
@@ -166,6 +168,10 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
         }
     }
 
+    // Unmark corner cells
+    for (uint8_t i = 0; i < corners.count; i++)
+        if(corners.cells[i]->type == CELL_MARKED)
+            corners.cells[i]->type = CELL_EMPTY;
 
     break_all:
 
@@ -177,9 +183,6 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
                 markCell->type = CELL_EMPTY;
         }
     }
-    for (uint8_t i = 0; i < corners.count; i++)
-        if(corners.cells[i]->type == CELL_MARKED)
-            corners.cells[i]->type = CELL_EMPTY;
 
     // Set the variable of all the affected sets back to 0.
     for (size_t i = 0; i < affectedSet_i; i++) {

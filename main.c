@@ -10,22 +10,33 @@
 
 #define PRINT_STEPS
 
+#define DETECT_BOARD
+
 int main(int argc, char *argv[]) {
 
-    setbuf(stdout, NULL);
+#ifdef DETECT_BOARD
     image_t image = getBrowserWindow();
-    uint32_t *boardGroups;
-    detectBoard(image, &boardGroups, atoi(argv[1]));
+    uint32_t *colors;
+    uint32_t size = detectBoard(image, &colors, atoi(argv[1]));
+
+
+    if (size == 0) {
+        return -1;
+    }
 
     if (argc > 2 && strcmp(argv[2], "export") == 0)
         imageToFile("img/eendje.ppm", image.pixels, image.width, image.height);
 
 
+    board_t board = createBoard(size);
+    colorBoard(board, colors);
+
+
     free(image.pixels);
-    free(boardGroups);
+    free(colors);
 
-    return 0;
 
+#else
     //* Opening file
     if (argc != 2) {
         printf(
@@ -58,6 +69,7 @@ int main(int argc, char *argv[]) {
         freeBoard(board);
         return -1;
     }
+#endif
 
     printBoard(board);
 

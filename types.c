@@ -143,6 +143,35 @@ corners_t getCorners(board_t board, cell_t cell) {
 }
 
 
+void colorBoard(board_t board, uint32_t *colors) {
+    // Populate group and color fields in the cells,
+    // and count the cells for every group.
+    for (uint32_t i = 0; i < board.size * board.size; i++) {
+        board.groups[colors[i]].cellCount++;
+        board.cells[i].color = colors[i];
+        board.cells[i].group = &board.groups[colors[i]];
+    }
+
+    // Allocate the group cell pointer arrays.
+    for (uint32_t i = 0; i < board.size; i++) {
+        cellSet_t *group = &board.groups[i];
+        group->cells = malloc((group->cellCount + 1) * sizeof(cell_t*));
+        fprintf(stderr, "group %d is size %d\n", i, group->cellCount);
+        group->cellCount = 0;
+
+    }
+
+    // Populate the group cell pointer arrays.
+    for (uint32_t i = 0; i < board.size * board.size; i++) {
+        cellSet_t *group = &board.groups[colors[i]];
+        group->cells[group->cellCount] = &board.cells[i];
+        fprintf(stderr, "Giving group %d its %d'th cell\n", colors[i], group->cellCount);
+        group->cellCount++;
+    }
+
+}
+
+
 void crossCell(cell_t *cell) {
     DPRINTF("Crossing cell [\x1b[90m%d, %d\x1b[0m]\n", cell->x, cell->y);
 
@@ -187,6 +216,7 @@ uint8_t checkBoard(board_t board) {
 
 
 void printBoard(board_t board) {
+
     printf("   ");
     for (uint32_t i = 0; i < board.size; i++) {
         printf("%2d", i);

@@ -44,6 +44,7 @@ static void sanitizeBins(
     bin_t *xBins, uint32_t *xBins_i, bin_t *yBins, uint32_t *yBins_i
 );
 
+
 int compare_bins(const void *a_ptr, const void *b_ptr) {
     const bin_t a = *((bin_t *) a_ptr);
     const bin_t b = *((bin_t *) b_ptr);
@@ -68,7 +69,6 @@ uint32_t detectBoard(image_t img, uint32_t **board, int crossingOffset) {
         return 0;
     }
 
-
     DPRINTF("Found %u points!!!\n", pointCount);
 
     // Put the point coordinates into bins.
@@ -92,7 +92,9 @@ uint32_t detectBoard(image_t img, uint32_t **board, int crossingOffset) {
     }
     printf("\n");
 
-    uint32_t size = xBins_n;
+    // xBins_n is the amount of crossings. We are looking for cells,
+    // which is the amount of crossings + 1.
+    uint32_t size = xBins_n + 1;
 
     *board = findColors(img, xBins, yBins, size);
 
@@ -102,6 +104,7 @@ uint32_t detectBoard(image_t img, uint32_t **board, int crossingOffset) {
 
     return size;
 }
+
 
 uint32_t getPoints(image_t img, coord_t **points, int pixelOffset) {
 

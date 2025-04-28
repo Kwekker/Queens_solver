@@ -7,8 +7,6 @@
 #include "types.h"
 
 
-
-//! Bro you fucking idiot oh my god its a pointer not a pointer to a pointer oh my godddddd
 int readQueensFile(FILE *file, board_t *board) {
 
     const uint32_t size = board->size;
