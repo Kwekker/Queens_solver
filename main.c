@@ -85,23 +85,15 @@ int main(int argc, char *argv[]) {
     }
 
     printf("Solving this board:\n");
-    printBoard(board);
+    printBoard(board, 0);
 
     printf("\n");
 
-    uint8_t solved = solve(board);
+    board = solve(board);
 
+    printf("\nSolved!\n");
 
-    if (solved == 0) {
-        printf("\nCould not solve the board in %d iterations :(\n\n",
-            MAX_ATTEMPTS
-        );
-    }
-    else {
-        printf("\nSolved the board in %d iterations!!\n\n", solved + 1);
-    }
-
-    printBoard(board);
+    printBoard(board, 0);
 
     printf("\n");
 

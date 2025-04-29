@@ -3,3 +3,5 @@ queens
 *.c_
 solver
 seeer
+*.ppm
+*.svg

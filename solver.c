@@ -12,7 +12,8 @@
 #define GREEN "\x1b[33m"
 #define NONE "\x1b[0m"
 
-#define PRINT_STEPS
+// #define PRINT_STEPS
+// #define PRINT_INTERMEDIATE
 
 
 
@@ -30,11 +31,14 @@ static void checkColRowRedundancy(board_t board);
 board_t gBoard;
 
 
-uint8_t solve(board_t board) {
+board_t solve(board_t board) {
 
     uint32_t prevTotalCellCount = -1;
-    for (uint32_t attempts = 0; attempts < MAX_ATTEMPTS; attempts++) {
-        DPRINTF("Iteration %d\n", attempts);
+    [[maybe_unused]]
+    uint32_t iteration = 0;
+    while (1) {
+        DPRINTF("Iteration %d\n", iteration);
+        iteration++;
 
         gBoard = board;
 
@@ -78,18 +82,13 @@ uint8_t solve(board_t board) {
             totalCellCount == prevTotalCellCount
             && totalCellCount > board.size
         ) {
-
-            printBoard(board, 0);
-            printf("\n");
             DPRINTF(
                 "The board is not solvable using quick methods. "
                 "Bruteforcing time!\n"
             );
             board_t solved = bruteForce(board, &board.groups[0], 0);
-            printf("Solved board:\n");
-            printBoard(solved, 0);
-            freeBoard(solved);
-            return attempts + 1;
+            freeBoard(board);
+            return solved;
         }
 
         prevTotalCellCount = totalCellCount;
@@ -103,10 +102,9 @@ uint8_t solve(board_t board) {
         if (totalCellCount != board.size) continue;
 
         // Solved!
-        return attempts + 1;
+        return board;
     }
 
-    return 0;
 }
 
 
@@ -160,13 +158,6 @@ void isolate(cellSet_t *set, cell_t *cell) {
     set->solved = 1;
 }
 
-// Preprocessor bs
-// #ifndef PRINT_BLOCKERS
-//     #ifdef DEBUG_PRINTS
-//         #define REDEF_DEBUG_PRINTS
-//         #undef DEBUG_PRINTS
-//     #endif
-// #endif
 
 #undef DEBUG_PRINT_MODE
 #define DEBUG_PRINT_MODE PRINT_BLOCKERS
