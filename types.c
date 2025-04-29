@@ -171,6 +171,8 @@ void colorBoard(board_t board, uint32_t *colors) {
 
 }
 
+#undef DEBUG_PRINT_MODE
+#define DEBUG_PRINT_MODE PRINT_CROSSINGS
 
 void crossCell(cell_t *cell) {
     DPRINTF("Crossing cell [\x1b[90m%d, %d\x1b[0m]\n", cell->x, cell->y);
@@ -192,6 +194,10 @@ void crossCell(cell_t *cell) {
         }
     }
 }
+
+
+#undef DEBUG_PRINT_MODE
+#define DEBUG_PRINT_MODE PRINT_NORMAL
 
 
 uint8_t inSet(cellSet_t *set, cell_t* cell) {
