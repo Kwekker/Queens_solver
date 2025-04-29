@@ -1,6 +1,15 @@
 # Queens solver
 
+This is a solver that solves the Queens game on a certain business-oriented social media platform. It is going to be capable of the following things:
 
+- Read the board from a browser window
+- Find the queen positions by solving the puzzle
+- Placing the queens on the browser window
+
+The game is also called "Star Battle". You can play it on [this website](https://www.puzzle-star-battle.com).
+
+
+## The solver
 Still only uses the following techniques:
 - Check if a set has only 1 cell. Mark it as queen if it does.
 - When a cell is marked as queen, the cells in its sets are crossed, as well as the cells adjacent to the queen.
