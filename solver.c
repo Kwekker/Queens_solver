@@ -24,8 +24,6 @@ static uint8_t markCell(
     cellSet_t **affectedSets, size_t *affectedSet_i
 );
 static void checkColRowRedundancy(board_t board);
-static uint8_t bruteForce(board_t board, cellSet_t *group, uint32_t depth);
-
 
 
 //! Delete this
@@ -36,6 +34,8 @@ uint8_t solve(board_t board) {
 
     uint32_t prevTotalCellCount = -1;
     for (uint32_t attempts = 0; attempts < MAX_ATTEMPTS; attempts++) {
+        DPRINTF("Iteration %d\n", attempts);
+
         gBoard = board;
 
         // Iterate over all sets of the board.
@@ -53,7 +53,7 @@ uint8_t solve(board_t board) {
 
 #ifdef PRINT_INTERMEDIATE
         printf("Intermediate board:\n");
-        printBoard(board);
+        printBoard(board, 0);
         printf("\n");
 #endif
 
@@ -74,18 +74,28 @@ uint8_t solve(board_t board) {
             totalCellCount += board.groups[i].cellCount;
         }
 
-        if (totalCellCount == prevTotalCellCount) {
+        if (
+            totalCellCount == prevTotalCellCount
+            && totalCellCount > board.size
+        ) {
+
+            printBoard(board, 0);
+            printf("\n");
             DPRINTF(
                 "The board is not solvable using quick methods. "
                 "Bruteforcing time!\n"
             );
-            // bruteForce(board, &board.groups[0], 1);
+            board_t solved = bruteForce(board, &board.groups[0], 0);
+            printf("Solved board:\n");
+            printBoard(solved, 0);
+            freeBoard(solved);
+            return attempts + 1;
         }
 
         prevTotalCellCount = totalCellCount;
 
 #ifdef PRINT_STEPS
-        printBoard(board);
+        printBoard(board, 0);
         printf("\n\n");
 #endif
 
@@ -321,120 +331,60 @@ uint8_t markCell(
 
 
 
-// Mark or unmark a cell for the bruteforce method.
-// If we're marking a cell, also check if the sets the cell is in isn't empty
-// after marking.
-static uint8_t markBlockedCell(
-    cell_t *cell, uint32_t markVal
-) {
-    uint8_t invalidSets = 0;
-    cell->variable = markVal;
-    for (uint8_t s = 0; s < 3; s++) {
-        cellSet_t *set = cell->sets[s];
 
-        // Marking procedure
-        if (markVal) {
-            set->variable++;
-            // Check if the set is still valid
-            if (set->cellCount == set->variable) {
-                printf("ayo the %d set of cell [%d, %d] is now empty :(\n",
-                    s, cell->x, cell->y
-                );
-                invalidSets++;
-            }
-        }
-        // Unmarking procedure
-        else {
-            set->variable--;
-        }
-    }
-    return invalidSets;
-}
-
-
-static uint8_t markBlockedCells(
-    board_t board, cell_t *cell,
-    uint32_t checkVal, uint32_t markVal
-) {
-    cellSet_t *col = cell->column;
-    cellSet_t *row = cell->row;
-    corners_t corners = getCorners(board, *cell);
-
-    uint8_t invalidSets = 0;
-
-    for (uint32_t colCell = 0; colCell < col->cellCount; colCell++) {
-        cell_t *cCell = col->cells[colCell];
-        if (cCell->variable == checkVal && cCell != cell)
-            invalidSets += markBlockedCell(cCell, markVal);
-    }
-    for (uint32_t rowCell = 0; rowCell < row->cellCount; rowCell++) {
-        cell_t *cCell = row->cells[rowCell];
-        if (cCell->variable == checkVal && cCell != cell)
-            invalidSets += markBlockedCell(cCell, markVal);
-    }
-    for (uint8_t cornerCell = 0; cornerCell < corners.count; cornerCell++) {
-        cell_t *cCell = corners.cells[cornerCell];
-        if (cCell->variable == checkVal && cCell != cell)
-            invalidSets += markBlockedCell(cCell, markVal);
-    }
-
-    return invalidSets;
-}
-
-
-
-uint8_t bruteForce(board_t board, cellSet_t *group, uint32_t depth) {
+board_t bruteForce(board_t board, cellSet_t *group, uint32_t depth) {
     for (uint32_t c = 0; c < group->cellCount; c++) {
+        board_t copy = copyBoard(board);
+
+        // Get cell from original board.
         cell_t *cell = group->cells[c];
+        // Translate that to a cell from the copied board.
+        cell = &copy.cells[cell->x + copy.size * cell->y];
 
-        printf("cols: ");
-        for (uint32_t i = 0; i < board.size; i++) {
-            printf("%3d ", board.columns[i].variable);
-        }
-        printf("\nrows: ");
-        for (uint32_t i = 0; i < board.size; i++) {
-            printf("%3d ", board.rows[i].variable);
-        }
-        printf("\ngrps: ");
-        for (uint32_t i = 0; i < board.size; i++) {
-            printf("%3d ", board.groups[i].variable);
-        }
-        printf("\n");
+        for (uint8_t t = 0; t < depth; t++) DPRINTF("\t");
+        DPRINTF("%2d: Trying queen at [%d, %d]\n",
+            group->identifier, cell->x, cell->y
+        );
 
-
-        for (uint8_t t = 1; t < depth; t++) printf("\t");
-        printf("Trying queen at [%d, %d]\n", cell->x, cell->y);
-
-        uint8_t invalidSets = markBlockedCells(board, cell, 0, depth);
-        printBoardVars(board);
-
-        if (invalidSets) {
-            for (uint8_t t = 1; t < depth; t++) printf("\t");
-            printf("Seems it shouldn't go there\n");
-            // If there's invalid sets with this queen position, it won't work
-            // so we skip it.
-            // First unmark the cells though
-            markBlockedCells(board, cell, depth, 0);
+        if (checkCellBlocker(copy, cell)) {
+            for (uint8_t t = 0; t < depth; t++) DPRINTF("\t");
+            DPRINTF("It a blocker..\n");
+            freeBoard(copy);
             continue;
         }
-        if (group->identifier < board.size - 1) {
-            for (uint8_t t = 1; t < depth; t++) printf("\t");
-            printf("Next layer..\n");
-            bruteForce(
-                board,
-                &board.groups[group->identifier + 1],
-                depth + 1
-            );
+
+        setQueen(copy, cell);
+
+        if (checkBoard(copy)) {
+            for (uint8_t t = 0; t < depth; t++) DPRINTF("\t");
+            DPRINTF("Bad idea..\n");
+            freeBoard(copy);
+            continue;
         }
-        else {
-            printf("OMG I FOUND THE SOLUTION\n");
+
+#if DEBUG_PRINT_MODE
+        printBoard(copy, depth);
+#endif
+
+        // If we passed the check and this is the last group,
+        // we have solved the board.
+        if (depth + 1 == board.size) return copy;
+
+
+        board_t ret = bruteForce(
+            copy, &copy.groups[group->identifier + 1], depth + 1
+        );
+
+        // Return the board if the next recursion layer solved it.
+        if (ret.size) {
+            freeBoard(copy);
+            return ret;
         }
-        for (uint8_t t = 1; t < depth; t++) printf("\t");
-        printf("Nah that wasn't it.\n");
-        markBlockedCells(board, cell, depth, 0);
+
+        freeBoard(copy);
     }
 
-    return 0;
+    return (board_t){.size = 0};
 }
 
 

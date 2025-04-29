@@ -252,9 +252,23 @@ uint8_t checkBoard(board_t board) {
 }
 
 
-#if 1
-void printBoard(board_t board) {
+uint8_t checkSets(board_t board) {
+    for (uint32_t i = 0; i < board.size; i++) {
+        if (
+            board.columns[i].cellCount <= 0
+            || board.rows[i].cellCount <= 0
+            || board.groups[i].cellCount <= 0
+        ) return -1;
+    }
 
+    return 0;
+}
+
+
+#if 1
+void printBoard(board_t board, uint32_t indentation) {
+
+    for (uint8_t t = 0; t < indentation; t++) printf("\t");
     printf("   ");
     for (uint32_t i = 0; i < board.size; i++) {
         printf("%2d", i);
@@ -267,6 +281,7 @@ void printBoard(board_t board) {
     };
 
     for (uint32_t j = 0; j < board.size; j++) {
+        for (uint8_t t = 0; t < indentation; t++) printf("\t");
         printf("\x1b[%dm%2d ", textColors[j], j);
         for (uint32_t i = 0; i < board.size; i++) {
             if (board.cells[j * board.size + i].type > 3) {

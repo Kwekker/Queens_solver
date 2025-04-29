@@ -10,6 +10,7 @@
 // #define PRINT_LOGS
 
 uint8_t solve(board_t board);
+board_t bruteForce(board_t board, cellSet_t *group, uint32_t depth);
 
 
 #endif

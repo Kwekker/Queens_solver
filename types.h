@@ -48,7 +48,7 @@ struct cellSet_struct{
 
     // Pointer to the array of pointers to cells that are in this group
     cell_t **cells;
-    uint32_t cellCount;
+    int32_t cellCount;
 
     uint8_t solved;
 
@@ -100,7 +100,7 @@ uint8_t checkBoard(board_t board);
 void visuPrompt(board_t board, cell_t *cell, cell_t *markCell, cellSet_t *markSet);
 
 
-void printBoard(board_t board);
+void printBoard(board_t board, uint32_t indentation);
 void printBoardVars(board_t board);
 
 
