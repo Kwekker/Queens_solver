@@ -8,8 +8,6 @@
 #include "looker.h"
 #include "seeer.h"
 
-#define PRINT_STEPS
-
 
 int main(int argc, char *argv[]) {
 
@@ -91,24 +89,16 @@ int main(int argc, char *argv[]) {
 
     printf("\n");
 
-    uint8_t solved = 0;
-    uint8_t iteration = 0;
-    for (; iteration < 7; iteration++) {
-        if (solve(board)) {
-            solved = 1;
-            break;
-        }
-#ifdef PRINT_STEPS
-        printBoard(board);
-        printf("\n\n");
-#endif
-    }
+    uint8_t solved = solve(board);
+
 
     if (solved == 0) {
-        printf("\nCould not solve the board in %d iterations :(\n\n", iteration);
+        printf("\nCould not solve the board in %d iterations :(\n\n",
+            MAX_ATTEMPTS
+        );
     }
     else {
-        printf("\nSolved the board in %d iterations!!\n\n", iteration + 1);
+        printf("\nSolved the board in %d iterations!!\n\n", solved + 1);
     }
 
     printBoard(board);

@@ -2,9 +2,7 @@
 #include <stdlib.h>
 
 #include "types.h"
-
 #include "debug_prints.h"
-
 
 void freeBoard(board_t board);
 
@@ -88,6 +86,40 @@ void freeBoard(board_t board) {
     free(board.cells);
     // Cells don't contain any heap pointers so they don't need special care.
 
+}
+
+// Returns a copy of the input board, with new arrays.
+// The returned board should be freed using freeBoard when you are done with it.
+board_t copyBoard(board_t board) {
+    const uint32_t size = board.size;
+
+    board_t copy = createBoard(size);
+    for (uint32_t c = 0; c < size * size; c++) {
+        copy.cells[c].color = board.cells[c].color;
+        copy.cells[c].type = board.cells[c].type;
+        copy.cells[c].group = &copy.groups[copy.cells[c].color];
+    }
+
+
+    for (uint32_t i = 0; i < size; i++) {
+        copy.groups[i].cells = malloc(
+            board.groups[i].cellCount * sizeof(cell_t*)
+        );
+    }
+
+    for (uint32_t s = 0; s < 3; s++) {
+        for (uint32_t i = 0; i < size; i++) {
+            cellSet_t *set = &copy.set_arrays[s][i];
+            set->cellCount = board.set_arrays[s][i].cellCount;
+            for (uint32_t c = 0; c < set->cellCount; c++) {
+                cell_t *bCell = board.set_arrays[s][i].cells[c];
+                set->cells[c] = &copy.cells[bCell->x + bCell->y * size];
+            }
+            copy.set_arrays[s][i].solved = board.set_arrays[s][i].solved;
+        }
+    }
+
+    return copy;
 }
 
 
@@ -220,7 +252,7 @@ uint8_t checkBoard(board_t board) {
 }
 
 
-
+#if 1
 void printBoard(board_t board) {
 
     printf("   ");
@@ -246,6 +278,64 @@ void printBoard(board_t board) {
                 printf("\x1b[%dm %c",
                     textColors[board.cells[j * board.size + i].color],
                     typeChars[board.cells[j * board.size + i].type]
+                );
+            }
+        }
+        printf("\n\x1b[0m");
+    }
+
+}
+
+#else
+
+void printBoard(board_t board) {
+
+    for (uint32_t s = 0; s < 3; s++) {
+        for (uint32_t i = 0; i < board.size; i++) {
+            cellSet_t *set = &board.set_arrays[s][i];
+
+            printf("Set [%d][%d]:\n", s, i);
+            printf("\tid: %d\n", set->identifier);
+            printf("\tcellCount: %d\n", set->cellCount);
+            printf("\tsolved: %d\n", set->solved);
+            printf("\tcells: ");
+            for (uint32_t c = 0; c < set->cellCount; c++) {
+                if (set->cells[c]->sets[s] != set) {
+                    printf("\x1b[31m%d\x1b[0m ", c);
+                }
+            }
+            printf("\n");
+        }
+    }
+
+}
+#endif
+
+
+void printBoardVars(board_t board) {
+
+    printf("   ");
+    for (uint32_t i = 0; i < board.size; i++) {
+        printf("%2d", i);
+    }
+    printf("\n");
+
+    uint32_t textColors[] = {
+        31, 32, 33, 34, 35, 36, 37, 90, 91, 92, 93, 94, 95, 96, 97
+    };
+
+    for (uint32_t j = 0; j < board.size; j++) {
+        printf("\x1b[%dm%2d ", textColors[j], j);
+        for (uint32_t i = 0; i < board.size; i++) {
+            if (board.cells[j * board.size + i].type == CELL_CROSSED) {
+                printf("\x1b[%dm .",
+                    textColors[board.cells[j * board.size + i].color]
+                );
+            }
+            else {
+                printf("\x1b[%dm %d",
+                    textColors[board.cells[j * board.size + i].color],
+                    board.cells[j * board.size + i].variable
                 );
             }
         }

@@ -4,6 +4,8 @@
 #include "types.h"
 
 
+#define MAX_ATTEMPTS 7
+
 // #define PRINT_INTERMEDIATE
 // #define PRINT_LOGS
 

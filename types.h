@@ -22,6 +22,10 @@ typedef struct {
     uint32_t x;
     uint32_t y;
     uint8_t type;
+
+    // Useful variable used for various things.
+    // Always set back to 0 at the end of a function using it.
+    uint16_t variable;
     
     // God fuck I love C's anonymous structs and unions.
     union {
@@ -86,6 +90,7 @@ typedef struct {
 
 board_t createBoard(uint32_t size);
 void freeBoard(board_t board);
+board_t copyBoard(board_t board);
 corners_t getCorners(board_t board, cell_t cell);
 void crossCell(cell_t *cell);
 uint8_t inSet(cellSet_t *set, cell_t* cell);
@@ -96,6 +101,7 @@ void visuPrompt(board_t board, cell_t *cell, cell_t *markCell, cellSet_t *markSe
 
 
 void printBoard(board_t board);
+void printBoardVars(board_t board);
 
 
 #endif
