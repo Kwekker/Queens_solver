@@ -1,12 +1,15 @@
 #include "looker.h"
+#include "debug_prints.h"
 
 #include <X11/X.h>
 #include <X11/Xlib.h>
+#include <X11/extensions/XTest.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
+#include <unistd.h>
 
 // gcc -o seeer seeer.c -Wall -lX11
 
@@ -40,16 +43,16 @@ image_t getBrowserWindow(void) {
     int height = browser_attrs.height;
 
     // Get the window's image.
-    printf("getting image of [%d, %d]\n", width, height);
+    DPRINTF("getting image of [%d, %d]\n", width, height);
     XImage *image =
         XGetImage(display, browser, 0, 0, width, height, AllPlanes, ZPixmap);
 
     if (image == NULL) {
-        printf("Window is cringe\n");
+        DPRINTF("Window is cringe\n");
         XFree(display);
         return ret;
     }
-    printf("Got image\n");
+    DPRINTF("Got image\n");
 
 
     // Allocate the array.
@@ -86,6 +89,30 @@ image_t getBrowserWindow(void) {
 }
 
 
+void waitForActivation(void) {
+    Display *display = XOpenDisplay(NULL);
+    Window root = DefaultRootWindow(display);
+    Window browser = findBrowser(display, root, 0);
+
+    DPRINTF("Found window. Waiting for activation..\n");
+
+    XRaiseWindow(display, browser);
+
+    XSelectInput(display, browser, FocusChangeMask);
+    XEvent event;
+    while (1) {
+        XNextEvent(display, &event);
+
+        if (event.type == FocusIn) {
+            DPRINTF("Window 0x%lx gained focus!\n", browser);
+            XCloseDisplay(display);
+            return;
+        }
+    }
+
+}
+
+
 void imageToFile(const char *fileName, pixel_t *image, uint32_t width, uint32_t height) {
 
     FILE *file = fopen(fileName, "w");
@@ -108,11 +135,8 @@ Window findBrowser(Display *display, Window root, int depth) {
     uint32_t kidCount = 0;
     XQueryTree(display, root, &idc1, &idc2, &kids, &kidCount);
 
-    // for (uint32_t d = 0; d < depth; d++) printf("\t");
-    // printf("has %d kids\n", kidCount);
 
     for (uint32_t i = 0; i < kidCount; i++) {
-
 
         if (isBrowser(display, kids[i])) {
             Window ret = kids[i];
@@ -317,4 +341,57 @@ void printKids(Display *display, Window *kids, uint32_t kidCount, uint32_t depth
         XFree(kidsKids);
 
     }
+}
+
+
+// ============ Acting ============
+
+static Display *actingDisplay;
+
+void initClicking(void) {
+    actingDisplay = XOpenDisplay(NULL);
+}
+
+void stopClicking(void) {
+    XCloseDisplay(actingDisplay);
+}
+
+static void getMouseCoords(int *x, int *y) {
+    XEvent event;
+    XQueryPointer (
+        actingDisplay, DefaultRootWindow (actingDisplay),
+        &event.xbutton.root, &event.xbutton.window,
+        &event.xbutton.x_root, &event.xbutton.y_root,
+        &event.xbutton.x, &event.xbutton.y,
+        &event.xbutton.state
+    );
+    *x = event.xbutton.x;
+    *y = event.xbutton.y;
+}
+
+
+void moveMouseTo(int x, int y) {
+    int cur_x, cur_y;
+    getMouseCoords(&cur_x, &cur_y);
+    usleep (1);
+    XWarpPointer(actingDisplay, None, None, 0,0,0,0, x - cur_x, y - cur_y);
+    usleep (1);
+}
+
+
+void clickMouse(void) {
+    XTestFakeButtonEvent(actingDisplay, Button1, True, CurrentTime);
+    usleep (1);
+    XTestFakeButtonEvent(actingDisplay, Button1, False, CurrentTime);
+}
+
+
+void doubleClickMouse(void) {
+    XTestFakeButtonEvent(actingDisplay, Button1, True, CurrentTime);
+    usleep (1);
+    XTestFakeButtonEvent(actingDisplay, Button1, False, CurrentTime);
+    usleep (10);
+    XTestFakeButtonEvent(actingDisplay, Button1, True, CurrentTime);
+    usleep (1);
+    XTestFakeButtonEvent(actingDisplay, Button1, False, CurrentTime);
 }

@@ -1,31 +1,36 @@
-#include <stdio.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
 
+#include "clicker.h"
+#include "looker.h"
+#include "reader.h"
+#include "seeer.h"
 #include "solver.h"
 #include "types.h"
-#include "reader.h"
-#include "looker.h"
-#include "seeer.h"
-
 
 int main(int argc, char *argv[]) {
 
-    if (argc < 2) {
-        printf(
-            "You need to specify the mode. \n"
-            "Usage: %s (file|auto) [filename]", argv[0]
-        );
-    }
-
     board_t board;
+    boardScreenInfo_t screenInfo = {0};
 
     if (strcmp(argv[1], "auto") == 0) {
 
-        //* Finding the browser window.
-        image_t image = getBrowserWindow();
+        waitForActivation();
+
+        uint32_t size = 0;
+
+        image_t image;
         uint32_t *colors;
-        uint32_t size = detectBoard(image, &colors, 5);
+        while (1) {
+            //* Finding the browser window.
+            image = getBrowserWindow();
+            size = detectBoard(image, &colors, &screenInfo);
+
+            if (size) break;
+
+            free(image.pixels);
+        }
 
 
         if (size == 0) {
@@ -33,12 +38,12 @@ int main(int argc, char *argv[]) {
         }
 
         if (argc > 2 && strcmp(argv[2], "export") == 0)
-            imageToFile("img/eendje.ppm", image.pixels, image.width, image.height);
-
+            imageToFile(
+                "img/eendje.ppm", image.pixels, image.width, image.height
+            );
 
         board = createBoard(size);
         colorBoard(board, colors);
-
 
         free(image.pixels);
         free(colors);
@@ -64,7 +69,6 @@ int main(int argc, char *argv[]) {
             return -1;
         }
 
-
         //* Reading file
         if (measureQueensFile(file, &size)) {
             return -1;
@@ -79,8 +83,7 @@ int main(int argc, char *argv[]) {
             freeBoard(board);
             return -1;
         }
-    }
-    else {
+    } else {
         printf("Usage: %s (auto|file) [filename]\n", argv[0]);
     }
 
@@ -92,6 +95,10 @@ int main(int argc, char *argv[]) {
     board = solve(board);
 
     printf("\nSolved!\n");
+    if (screenInfo.offset != 0) {
+        printf("Clicking..\n");
+        clickSolveBoard(board, screenInfo, atoi(argv[2]));
+    }
 
     printBoard(board, 0);
 

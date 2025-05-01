@@ -45,6 +45,10 @@ static void sanitizeBins(
 );
 
 
+#undef DEBUG_PRINT_MODE
+#define DEBUG_PRINT_MODE PRINT_SEEING
+
+
 int compare_bins(const void *a_ptr, const void *b_ptr) {
     const bin_t a = *((bin_t *) a_ptr);
     const bin_t b = *((bin_t *) b_ptr);
@@ -55,9 +59,11 @@ int compare_bins(const void *a_ptr, const void *b_ptr) {
 }
 
 
-//TODO: Give pixelOffset a better name
-uint32_t detectBoard(image_t img, uint32_t **board, int crossingOffset) {
+uint32_t detectBoard(
+    image_t img, uint32_t **board, boardScreenInfo_t *screenInfo
+) {
 
+    const uint32_t crossingOffset = 5;
     DPRINTF("Getting points :)\n");
     coord_t *points;
     uint32_t pointCount = getPoints(img, &points, crossingOffset);
@@ -97,6 +103,17 @@ uint32_t detectBoard(image_t img, uint32_t **board, int crossingOffset) {
     uint32_t size = xBins_n + 1;
 
     *board = findColors(img, xBins, yBins, size);
+
+    if (*board == NULL) {
+        free(points);
+        free(xBins);
+        free(yBins);
+        return 0;
+    }
+
+    screenInfo->offset = xBins[1].coordinate - xBins[0].coordinate;
+    screenInfo->y = yBins[0].coordinate - screenInfo->offset / 2;
+    screenInfo->x = xBins[0].coordinate - screenInfo->offset / 2;
 
     free(points);
     free(xBins);
@@ -380,3 +397,7 @@ static inline uint16_t sum(pixel_t pixel) {
 static inline pixel_t* getPix(image_t img, uint32_t x, uint32_t y) {
     return img.pixels + (x + y * img.width);
 }
+
+
+#undef DEBUG_PRINT_MODE
+#define DEBUG_PRINT_MODE PRINT_NORMAL

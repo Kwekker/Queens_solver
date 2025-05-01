@@ -21,9 +21,18 @@
     #error FUCK!!! Your WINDOW_BORDER_MARGIN is too SMALL!!!
 #endif
 
+// Gives the coordinates of the origin (top-left cell),
+// and the distance between 2 cells (offset).
+typedef struct {
+    uint32_t x;
+    uint32_t y;
+    uint32_t offset;
+} boardScreenInfo_t;
 
 // Returns the size of the board, or 0 when it didn't detect one.
-uint32_t detectBoard(image_t image, uint32_t **board, int crossingOffset);
+uint32_t detectBoard(
+    image_t image, uint32_t **board, boardScreenInfo_t *screenInfo
+);
 
 
 #endif
