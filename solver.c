@@ -24,7 +24,6 @@ static uint8_t markCell(
     cell_t *potentialBlocker, cell_t *markCell,
     cellSet_t **affectedSets, size_t *affectedSet_i
 );
-static void checkColRowRedundancy(board_t board);
 
 
 //! Delete this
@@ -238,58 +237,6 @@ uint8_t checkCellBlocker(board_t board, cell_t *cell) {
     return isBlocker;
 }
 
-void checkColRowGroupRedundancy(board_t board) {
-
-    uint32_t groupCounts[2][board.size];
-
-    // Iterate over the columns and rows
-    for (uint32_t s = 0; s < 2; s++) {
-        memset(groupCounts[s], 0, board.size * sizeof(uint32_t));
-
-        // For every column/row
-        for (uint32_t set_i = 0; set_i < board.size; set_i++) {
-
-            cellSet_t *set = &board.set_arrays[s][set_i];
-
-            // For every cell within that column/row,
-            // count the amount of different groups.
-            for (uint32_t c = 0; c < set->cellCount; c++) {
-                cell_t *cell = set->cells[c];
-
-                if (cell->group->variable) continue;
-                cell->group->variable = 1;
-                groupCounts[s][set_i]++;
-            }
-            // Reset the variable
-            for (uint32_t c = 0; c < set->cellCount; c++) {
-                set->cells[c]->group->variable = 0;
-            }
-        }
-    }
-
-    printf("Col counts: \n");
-    for (uint32_t i = 0; i < board.size; i++) {
-        printf("%2d ", groupCounts[0][i]);
-    }
-    printf("\nRow counts: \n");
-    for (uint32_t i = 0; i < board.size; i++) {
-        printf("%2d ", groupCounts[1][i]);
-    }
-    printf("\n");
-}
-
-
-
-void checkGroupRedundancy(board_t board) {
-
-}
-
-
-void checkColRowRedundancy(board_t board) {
-
-}
-
-
 
 uint8_t markCell(
     cell_t *potentialBlocker, cell_t *markCell,
@@ -305,9 +252,11 @@ uint8_t markCell(
 
         // We use the cool variable field for this
         // (very useful)
+        if (markSet->variable == 0) {
+            affectedSets[*affectedSet_i] = markSet;
+            (*affectedSet_i)++;
+        }
         markSet->variable++;
-        affectedSets[*affectedSet_i] = markSet;
-        (*affectedSet_i)++;
 
         if (markSet->cellCount - markSet->variable <= 0) {
 #if DEBUG_PRINT_MODE

@@ -19,8 +19,8 @@
 #define WHITE (pixel_t){.r = 255, .g = 255, .b = 255}
 
 typedef struct {
-    uint32_t x;
-    uint32_t y;
+    int32_t x;
+    int32_t y;
 } coord_t;
 
 
@@ -370,13 +370,13 @@ static uint32_t *findColors(image_t img, bin_t *xBins, bin_t *yBins, uint32_t si
         return NULL;
     }
 
+    #if DEBUG_PRINT_MODE
     for (uint32_t i = 0; i < colors_i; i++) {
-        printf("Color %d: #%02x%02x%02x  #%02x%02x%02x  #%02x%02x%02x\n", i,
-            colors[i].r, colors[i].g, colors[i].b,
-            colors[i].b, colors[i].g, colors[i].r,
-            colors[i].g, colors[i].r, colors[i].b
+        printf("Color %d: #%02x%02x%02x\n", i,
+            colors[i].r, colors[i].g, colors[i].b
         );
     }
+    #endif
 
     return board;
 }

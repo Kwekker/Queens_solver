@@ -188,7 +188,6 @@ void colorBoard(board_t board, uint32_t *colors) {
     for (uint32_t i = 0; i < board.size; i++) {
         cellSet_t *group = &board.groups[i];
         group->cells = malloc((group->cellCount + 1) * sizeof(cell_t*));
-        fprintf(stderr, "group %d is size %d\n", i, group->cellCount);
         group->cellCount = 0;
 
     }
@@ -197,7 +196,6 @@ void colorBoard(board_t board, uint32_t *colors) {
     for (uint32_t i = 0; i < board.size * board.size; i++) {
         cellSet_t *group = &board.groups[colors[i]];
         group->cells[group->cellCount] = &board.cells[i];
-        fprintf(stderr, "Giving group %d its %d'th cell\n", colors[i], group->cellCount);
         group->cellCount++;
     }
 
