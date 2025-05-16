@@ -109,46 +109,28 @@ flowchart LR
 
 
 ## The solver
-Still only uses the following techniques:
-- Check if a set has only 1 cell. Mark it as queen if it does.
-- When a cell is marked as queen, the cells in its sets are crossed, as well as the cells adjacent to the queen.
-- Check, for every cell, if it would completely block a set if it were a queen.
+The solver applies a number of simple techniques to quickly simplify a board. It does so repeatedly, until it cannot find any more changes to make (changes being cells being crossed off or marked as queen).
+After this, it runs a bruteforcing algorithm to completely solve the board.
 
+### Techniques
+The following techniques are applied:
+1. Check if a set has only 1 cell. Mark it as queen if it does.
+2. When a cell is marked as queen, the cells in its sets are crossed, as well as the cells adjacent to the queen.
+3. Check, for every cell, if it would completely block a set if it were a queen.
 
-For now, it has a lot of difficulty with [game 333](games/game333.txt) (me too).
+Most boards can actually be solved using only these three techniques.
 
+### Bruteforcing
+"Bruteforcing" is honestly a bit of a harsh name for what actually happens.
+It is a recursive function that basically does the following:
 
-## Implemented rules
-- Rule of 1 celled set = Queen
-- Rule of cell blocking a set = not a Queen
+Start with the first **group** (a group is a set of same-coloured cells).
+- For every **cell** in that **group**:
+  - Check if placing a queen here would completely block a set (using the same function as technique number 3)
+    - If so: go to the next **cell**   
+    - If not:
+      - Make a copy of the board
+      - Place a queen on the **cell** in the copied board
+      - Run the bruteforcing function with this copied board, but this time use the *next* **group**
 
-## Rules to be implemented
-- If n columns or rows contain cells in exactly n groups,
-  the queens of said groups can only land within these columns/rows.
-- If n groups have cells within exactly n columns or rows,
-  the queens of said columns/rows can only land within said groups.
-
-- Rule of only 1 solution. (Not sure if I will add this one. It's basically, if there is the *possibility* of a stalemate that has only 1 resolution, that resolution is correct.)
-
-
-
-## Unaccounted for situations
-This situation is unaccounted for:
-
-    0 1 2 3 4
-0  . A A . .
-1  B . . . .
-2  B . C C .
-3  . . C C .
-4  . . . . .
-
-The top-right cell of C blocks B[0, 2] and A[2, 0]. This results in:
-
-    0 1 2 3 4
-0  . A x . .
-1  B . . . .
-2  x . Q x .
-3  . . x x .
-4  . . . . .
-
-Which is an impossible situation. Thus, C[2, 2] should be crossed off.
+This way, it checks all possible queens positions rather efficiently. So efficiently in fact, that I'm actually not sure if using the techniques described in [Techniques](#techniques) make the program more efficient, or are actually slowing it down. I can, however, not be bothered to check this.
